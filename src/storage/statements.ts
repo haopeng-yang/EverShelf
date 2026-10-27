@@ -54,6 +54,19 @@ export function statementsForAction(action: ShelfAction, next: ShelfState): Stat
       ];
     }
 
+    case 'item/save': {
+      const item = next.items.find((i) => i.id === action.item.id);
+      if (!item) return [];
+      return [
+        {
+          sql: 'UPDATE items SET title = ?, cover_uri = ?, updated_at = ? WHERE id = ?',
+          params: [item.title, item.coverUri, item.updatedAt, item.id],
+        },
+        { sql: 'DELETE FROM tags WHERE item_id = ?', params: [item.id] },
+        ...insertTags(item),
+      ];
+    }
+
     case 'item/remove':
       return [{ sql: 'DELETE FROM items WHERE id = ?', params: [action.itemId] }];
 

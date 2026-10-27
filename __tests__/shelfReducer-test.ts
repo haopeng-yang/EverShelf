@@ -86,6 +86,30 @@ describe('custom tags', () => {
   });
 });
 
+describe('item/save', () => {
+  it('replaces title, cover and tags but keeps shelf and createdAt', () => {
+    const initial = createDefaultState();
+    let state = apply(initial, addItem(booksShelf(initial), 'Dune'));
+    const original = state.items[0];
+    const edited = {
+      ...original,
+      shelfId: 'movies',
+      createdAt: 0,
+      title: 'Dune Messiah',
+      coverUri: 'file:///cover.jpg',
+      tags: [{ id: 't1', name: 'Age Restricted', value: 'Recommended 15+' }],
+    };
+    state = apply(state, { type: 'item/save', item: edited, now: 500 });
+    expect(state.items[0]).toEqual({
+      ...original,
+      title: 'Dune Messiah',
+      coverUri: 'file:///cover.jpg',
+      tags: edited.tags,
+      updatedAt: 500,
+    });
+  });
+});
+
 describe('moveInArray', () => {
   it('clamps the target index', () => {
     expect(moveInArray(['a', 'b', 'c'], 0, 99)).toEqual(['b', 'c', 'a']);

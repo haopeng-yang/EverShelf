@@ -2,6 +2,7 @@
   "expo": {
     "name": "EverShelf",
     "slug": "EverShelf",
+    "scheme": "evershelf",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -22,7 +23,16 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "EverShelf uses your photos to set item covers.",
+          "cameraPermission": "EverShelf uses the camera to take item cover photos.",
+          "microphonePermission": false
+        }
+      ]
     ]
   }
 }

@@ -65,6 +65,12 @@ describe('SQLite storage', () => {
     step({ type: 'tag/move', itemId: dune.id, tagId: dune.tags[0].id, toIndex: 3, now: 2 });
     step({ type: 'tag/remove', itemId: dune.id, tagId: dune.tags[1].id, now: 3 });
     step({ type: 'item/update', itemId: dune.id, changes: { title: 'Dune (1965)', coverUri: null }, now: 4 });
+    const current = state.items.find((i) => i.id === dune.id)!;
+    step({
+      type: 'item/save',
+      item: { ...current, title: 'Dune', tags: [{ id: 'new-tag', name: 'Rating', value: '5/5' }, current.tags[0]] },
+      now: 5,
+    });
 
     step({ type: 'shelf/remove', shelfId: funny.id });
     step({ type: 'item/remove', itemId: dune.id });

@@ -12,10 +12,10 @@ export function addShelf(name: string, defaultTagNames: string[] = ['Date', 'Des
   return { type: 'shelf/add', shelf };
 }
 
-/** New item starts with the shelf's default tags, values empty. */
-export function addItem(shelf: Shelf, title: string, coverUri: string | null = null): ShelfAction {
+/** A new, unsaved item that starts with the shelf's default tags, values empty. */
+export function newItemDraft(shelf: Shelf, title = '', coverUri: string | null = null): Item {
   const now = Date.now();
-  const item: Item = {
+  return {
     id: newId(),
     shelfId: shelf.id,
     title: title.trim(),
@@ -24,7 +24,10 @@ export function addItem(shelf: Shelf, title: string, coverUri: string | null = n
     createdAt: now,
     updatedAt: now,
   };
-  return { type: 'item/add', item };
+}
+
+export function addItem(shelf: Shelf, title: string, coverUri: string | null = null): ShelfAction {
+  return { type: 'item/add', item: newItemDraft(shelf, title, coverUri) };
 }
 
 export function addTag(itemId: Id, name: string, value = ''): ShelfAction {
