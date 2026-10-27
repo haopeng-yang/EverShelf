@@ -2,7 +2,7 @@
 // run the same SQL against Node's built-in SQLite.
 
 /** Bump this and add a step in database.ts `migrate` whenever the tables change. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const CREATE_TABLES_V1 = `
 CREATE TABLE shelves (
@@ -29,6 +29,18 @@ CREATE TABLE tags (
 );
 CREATE INDEX tags_item_id ON tags(item_id);
 `;
+
+/** Version 2: app preferences such as theme and sort order, as key/value text. */
+export const CREATE_TABLES_V2 = `
+CREATE TABLE settings (
+  key TEXT PRIMARY KEY NOT NULL,
+  value TEXT NOT NULL
+);
+`;
+
+export const SELECT_SETTINGS = 'SELECT key, value FROM settings';
+export const UPSERT_SETTING =
+  'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value';
 
 export const SELECT_SHELVES = 'SELECT id, name, position, default_tag_names FROM shelves ORDER BY position, rowid';
 export const SELECT_ITEMS =

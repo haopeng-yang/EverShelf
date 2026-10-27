@@ -1,23 +1,32 @@
 import { Stack, router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { FlatList, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { FlatList, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { ItemCard } from '@/components/ItemCard';
+import { OptionSheet } from '@/components/OptionSheet';
 import { ShelfTabs } from '@/components/ShelfTabs';
+import { TextField } from '@/components/TextField';
+import { SORT_LABELS, SORT_ORDERS, filterItems, sortItems } from '@/models/query';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
 import type { Id } from '@/models/types';
+import { useSettings } from '@/state/SettingsProvider';
 import { useShelfState } from '@/state/ShelfProvider';
-import { colors, fontSize, spacing } from '@/theme';
+import { fontSize, makeStyles, spacing } from '@/theme';
 
 const MIN_CARD_WIDTH = 140;
+const SORT_OPTIONS = SORT_ORDERS.map((value) => ({ value, label: SORT_LABELS[value] }));
 
 export default function ShelvesScreen() {
   const state = useShelfState();
+  const { settings, setSetting } = useSettings();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [selectedId, setSelectedId] = useState<Id | undefined>(state.shelves[0]?.id);
+  const [query, setQuery] = useState('');
+  const [sortSheetOpen, setSortSheetOpen] = useState(false);
 
   // When a shelf is added (always at the end), switch to it.
   const shelfCount = useRef(state.shelves.length);
@@ -28,7 +37,11 @@ export default function ShelvesScreen() {
 
   // Falls back to the first shelf if the selected one was deleted.
   const shelf = state.shelves.find((s) => s.id === selectedId) ?? state.shelves[0];
-  const items = shelf ? selectItemsOnShelf(state, shelf.id).reverse() : [];
+  const items = useMemo(
+    () => (shelf ? sortItems(filterItems(selectItemsOnShelf(state, shelf.id), query), settings.sortOrder) : []),
+    [state, shelf, query, settings.sortOrder],
+  );
+  const searching = query.trim() !== '';
 
   const columns = Math.max(2, Math.floor((width - spacing.lg * 2) / MIN_CARD_WIDTH));
   const cardWidth = (width - spacing.lg * 2 - spacing.md * (columns - 1)) / columns;
@@ -40,9 +53,12 @@ export default function ShelvesScreen() {
       <Stack.Screen
         options={{
           title: 'EverShelf',
-          headerRight: shelf
-            ? () => <Button title="Edit shelf" variant="text" compact onPress={() => editShelf(shelf.id)} />
-            : undefined,
+          headerRight: () => (
+            <View style={styles.headerButtons}>
+              {shelf && <Button title="Edit shelf" variant="text" compact onPress={() => editShelf(shelf.id)} />}
+              <Button title="Settings" variant="text" compact onPress={() => router.push('/settings')} />
+            </View>
+          ),
         }}
       />
 
@@ -61,15 +77,50 @@ export default function ShelvesScreen() {
         </View>
       ) : (
         <>
+          <View style={styles.toolbar}>
+            <TextField
+              value={query}
+              onChangeText={setQuery}
+              placeholder={`Search ${shelf.name}, or tag: value`}
+              autoCapitalize="none"
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+              returnKeyType="search"
+              style={styles.search}
+              accessibilityLabel="Search"
+            />
+            <Button
+              title={`↕ ${SORT_LABELS[settings.sortOrder]}`}
+              compact
+              accessibilityLabel={`Sort: ${SORT_LABELS[settings.sortOrder]}`}
+              onPress={() => setSortSheetOpen(true)}
+              style={styles.sortButton}
+            />
+          </View>
+          {searching && (
+            <View style={styles.resultsRow}>
+              <Text style={styles.resultsText}>
+                {items.length} {items.length === 1 ? 'result' : 'results'}
+              </Text>
+              <Button title="Clear" variant="text" compact onPress={() => setQuery('')} />
+            </View>
+          )}
+
           <FlatList
             key={columns}
             data={items}
             numColumns={columns}
             keyExtractor={(item) => item.id}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             contentContainerStyle={[styles.grid, { paddingBottom: insets.bottom + 96 }]}
             columnWrapperStyle={columns > 1 ? styles.row : undefined}
             ListEmptyComponent={
-              <Text style={styles.emptyText}>Nothing on {shelf.name} yet. Tap “Add item” to start.</Text>
+              <Text style={styles.emptyText}>
+                {searching
+                  ? `Nothing on ${shelf.name} matches “${query.trim()}”.`
+                  : `Nothing on ${shelf.name} yet. Tap “Add item” to start.`}
+              </Text>
             }
             renderItem={({ item }) => (
               <ItemCard
@@ -88,16 +139,31 @@ export default function ShelvesScreen() {
           />
         </>
       )}
+
+      <OptionSheet
+        visible={sortSheetOpen}
+        title="Sort items by"
+        options={SORT_OPTIONS}
+        selected={settings.sortOrder}
+        onSelect={(order) => setSetting('sortOrder', order)}
+        onClose={() => setSortSheetOpen(false)}
+      />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+const useStyles = makeStyles((c) => ({
+  container: { flex: 1, backgroundColor: c.background },
+  headerButtons: { flexDirection: 'row', gap: spacing.xs },
+  toolbar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  search: { flex: 1 },
+  sortButton: { paddingVertical: spacing.sm },
+  resultsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg },
+  resultsText: { fontSize: fontSize.small, color: c.textMuted },
   grid: { padding: spacing.lg, gap: spacing.lg },
   row: { gap: spacing.md },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.lg },
-  emptyText: { fontSize: fontSize.body, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xl },
+  emptyText: { fontSize: fontSize.body, color: c.textMuted, textAlign: 'center', marginTop: spacing.xl },
   fab: {
     position: 'absolute',
     right: spacing.lg,
@@ -108,4 +174,4 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 4,
   },
-});
+}));

@@ -1,7 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 
 import type { Id, Shelf } from '@/models/types';
-import { colors, fontSize, radius, spacing } from '@/theme';
+import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
 interface ShelfTabsProps {
   shelves: Shelf[];
@@ -14,6 +14,7 @@ interface ShelfTabsProps {
 
 /** The row of shelf tabs across the top, scrolling sideways when there are many. */
 export function ShelfTabs({ shelves, selectedId, onSelect, onEditShelf, onAddShelf }: ShelfTabsProps) {
+  const styles = useStyles();
   return (
     <ScrollView
       horizontal
@@ -46,19 +47,19 @@ export function ShelfTabs({ shelves, selectedId, onSelect, onEditShelf, onAddShe
   );
 }
 
-const styles = StyleSheet.create({
-  bar: { flexGrow: 0, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+const useStyles = makeStyles((c) => ({
+  bar: { flexGrow: 0, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border },
   content: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   tab: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: c.surface,
   },
-  tabSelected: { backgroundColor: colors.tabSelected },
-  addTab: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed' },
+  tabSelected: { backgroundColor: c.tabSelected },
+  addTab: { backgroundColor: 'transparent', borderWidth: 1, borderColor: c.border, borderStyle: 'dashed' },
   pressed: { opacity: 0.6 },
-  label: { fontSize: fontSize.body, color: colors.text },
-  labelSelected: { color: colors.primary, fontWeight: '600' },
-  addLabel: { fontSize: fontSize.body, color: colors.textMuted },
-});
+  label: { fontSize: fontSize.body, color: c.text },
+  labelSelected: { color: c.primary, fontWeight: '600' },
+  addLabel: { fontSize: fontSize.body, color: c.textMuted },
+}));

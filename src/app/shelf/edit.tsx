@@ -1,6 +1,6 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { confirm, showMessage } from '@/components/dialogs';
@@ -11,7 +11,7 @@ import { newId } from '@/models/ids';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
 import { deleteCover } from '@/storage/covers';
-import { colors, fontSize, radius, spacing } from '@/theme';
+import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
 /** Starting tags are edited as rows with ids so React keeps inputs stable while typing. */
 interface TagNameRow {
@@ -31,6 +31,7 @@ export default function EditShelfScreen() {
   const [tagNames, setTagNames] = useState<TagNameRow[]>(() =>
     (shelf?.defaultTagNames ?? ['Date', 'Description']).map((n) => ({ key: newId(), name: n })),
   );
+  const styles = useStyles();
 
   if (id && !shelf) return <NotFound what="shelf" />;
 
@@ -132,11 +133,11 @@ export default function EditShelfScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   content: { padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.xl * 2 },
   section: { gap: spacing.sm },
-  label: { fontSize: fontSize.small, color: colors.textMuted, fontWeight: '600' },
-  hint: { fontSize: fontSize.small, color: colors.textMuted },
+  label: { fontSize: fontSize.small, color: c.textMuted, fontWeight: '600' },
+  hint: { fontSize: fontSize.small, color: c.textMuted },
   tagRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   tagInput: { flex: 1 },
   moveRow: { flexDirection: 'row', gap: spacing.sm },
@@ -146,6 +147,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
   },
-});
+}));

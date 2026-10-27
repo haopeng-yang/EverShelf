@@ -3,7 +3,16 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { createDefaultState } from '../models/defaults';
 import type { ShelfState } from '../models/types';
 import { rowsToState, type ItemRow, type ShelfRow, type TagRow } from './rows';
-import { CREATE_TABLES_V1, SCHEMA_VERSION, SELECT_ITEMS, SELECT_SHELVES, SELECT_TAGS } from './schema';
+import {
+  CREATE_TABLES_V1,
+  CREATE_TABLES_V2,
+  SCHEMA_VERSION,
+  SELECT_ITEMS,
+  SELECT_SETTINGS,
+  SELECT_SHELVES,
+  SELECT_TAGS,
+  UPSERT_SETTING,
+} from './schema';
 import { insertState, type Statement } from './statements';
 
 export const DATABASE_NAME = 'evershelf.db';
@@ -22,7 +31,10 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
       // user deletes later don't come back.
       for (const s of insertState(createDefaultState())) await db.runAsync(s.sql, s.params);
     }
-    // Future upgrades go here: if (version < 2) { ... }
+    if (version < 2) {
+      await db.execAsync(CREATE_TABLES_V2);
+    }
+    // Future upgrades go here: if (version < 3) { ... }
   });
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }
@@ -34,6 +46,15 @@ export async function loadState(db: SQLiteDatabase): Promise<ShelfState> {
     db.getAllAsync<TagRow>(SELECT_TAGS),
   ]);
   return rowsToState(shelves, items, tags);
+}
+
+export async function loadSettings(db: SQLiteDatabase): Promise<Record<string, string>> {
+  const rows = await db.getAllAsync<{ key: string; value: string }>(SELECT_SETTINGS);
+  return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+}
+
+export async function saveSetting(db: SQLiteDatabase, key: string, value: string): Promise<void> {
+  await db.runAsync(UPSERT_SETTING, [key, value]);
 }
 
 /** Runs statements together so a change is saved completely or not at all. */

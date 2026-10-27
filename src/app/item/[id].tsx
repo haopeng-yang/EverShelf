@@ -1,11 +1,11 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Cover } from '@/components/Cover';
 import { NotFound } from '@/components/NotFound';
 import { useShelfState } from '@/state/ShelfProvider';
-import { colors, fontSize, spacing } from '@/theme';
+import { fontSize, makeStyles, spacing } from '@/theme';
 
 /** Wider than this, the cover sits beside the details (as in the sketch); narrower, above them. */
 const SIDE_BY_SIDE_MIN_WIDTH = 600;
@@ -13,6 +13,7 @@ const SIDE_BY_SIDE_MIN_WIDTH = 600;
 export default function ItemScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const state = useShelfState();
+  const styles = useStyles();
   const { width } = useWindowDimensions();
   const item = state.items.find((i) => i.id === id);
   if (!item) return <NotFound what="item" />;
@@ -50,6 +51,7 @@ export default function ItemScreen() {
 }
 
 function Field({ name, value }: { name: string; value: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.field}>
       <Text style={styles.fieldName}>{name}:</Text>
@@ -60,7 +62,7 @@ function Field({ name, value }: { name: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   content: { padding: spacing.xl, gap: spacing.xl },
   row: { flexDirection: 'row', gap: spacing.xl, alignItems: 'flex-start' },
   column: { gap: spacing.xl },
@@ -69,8 +71,8 @@ const styles = StyleSheet.create({
   fields: { gap: spacing.lg },
   fieldsSide: { flex: 1 },
   field: { gap: spacing.xs },
-  fieldName: { fontSize: fontSize.small, color: colors.textMuted, fontWeight: '600' },
-  fieldValue: { fontSize: fontSize.body, color: colors.text, lineHeight: 22 },
-  fieldEmpty: { color: colors.textMuted },
+  fieldName: { fontSize: fontSize.small, color: c.textMuted, fontWeight: '600' },
+  fieldValue: { fontSize: fontSize.body, color: c.text, lineHeight: 22 },
+  fieldEmpty: { color: c.textMuted },
   footer: { alignItems: 'flex-end' },
-});
+}));

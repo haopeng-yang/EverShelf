@@ -2,9 +2,10 @@ import { Alert, Platform } from 'react-native';
 
 // Alert.alert with buttons does nothing on web, so fall back to the browser's dialogs there.
 
-export function showMessage(message: string): void {
-  if (Platform.OS === 'web') window.alert(message);
-  else Alert.alert(message);
+/** Shows a message. Long text goes in the body: Android cuts alert titles short. */
+export function showMessage(message: string, title = 'EverShelf'): void {
+  if (Platform.OS === 'web') window.alert(`${title}\n\n${message}`);
+  else Alert.alert(title, message);
 }
 
 /** Asks the user to confirm a destructive action. Resolves true if they agree. */

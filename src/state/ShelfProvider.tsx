@@ -8,7 +8,9 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+
+import { makeStyles } from '@/theme';
 
 import { shelfReducer, type ShelfAction } from '../models/shelfReducer';
 import type { ShelfState } from '../models/types';
@@ -79,13 +81,15 @@ export function useShelfDispatch(): (action: ShelfAction) => void {
 }
 
 function Message({ text }: { text: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.center}>
-      <Text>{text}</Text>
+      <Text style={styles.text}>{text}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-});
+const useStyles = makeStyles((c) => ({
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: c.background },
+  text: { color: c.text },
+}));

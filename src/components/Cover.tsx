@@ -1,6 +1,6 @@
-import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Image, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { colors, coverAspectRatio, fontSize, radius } from '@/theme';
+import { coverAspectRatio, fontSize, makeStyles, radius } from '@/theme';
 
 interface CoverProps {
   uri: string | null;
@@ -11,6 +11,7 @@ interface CoverProps {
 
 /** An item's cover at a 2:3 ratio, or a grey box with the title's first letter. */
 export function Cover({ uri, title, style }: CoverProps) {
+  const styles = useStyles();
   return (
     <View style={[styles.frame, style]}>
       {uri ? (
@@ -22,15 +23,15 @@ export function Cover({ uri, title, style }: CoverProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   frame: {
     aspectRatio: coverAspectRatio,
-    backgroundColor: colors.coverPlaceholder,
+    backgroundColor: c.coverPlaceholder,
     borderRadius: radius.sm,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
   image: { width: '100%', height: '100%' },
-  letter: { fontSize: fontSize.heading * 1.5, color: colors.background, fontWeight: '700' },
-});
+  letter: { fontSize: fontSize.heading * 1.5, color: c.coverLetter, fontWeight: '700' },
+}));

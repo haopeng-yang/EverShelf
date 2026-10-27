@@ -1,12 +1,13 @@
 import { Stack, router } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { colors, fontSize, spacing } from '@/theme';
+import { fontSize, makeStyles, spacing } from '@/theme';
 
 import { Button } from './Button';
 
 /** Shown when a screen's item or shelf no longer exists (e.g. it was deleted). */
 export function NotFound({ what }: { what: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ title: 'Not found' }} />
@@ -16,7 +17,7 @@ export function NotFound({ what }: { what: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   container: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.lg, padding: spacing.xl },
-  text: { fontSize: fontSize.body, color: colors.textMuted },
-});
+  text: { fontSize: fontSize.body, color: c.textMuted },
+}));

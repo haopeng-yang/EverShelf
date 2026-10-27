@@ -8,7 +8,15 @@ import { createDefaultState } from '../src/models/defaults';
 import { shelfReducer, type ShelfAction } from '../src/models/shelfReducer';
 import type { ShelfState } from '../src/models/types';
 import { rowsToState, type ItemRow, type ShelfRow, type TagRow } from '../src/storage/rows';
-import { CREATE_TABLES_V1, SELECT_ITEMS, SELECT_SHELVES, SELECT_TAGS } from '../src/storage/schema';
+import {
+  CREATE_TABLES_V1,
+  CREATE_TABLES_V2,
+  SELECT_ITEMS,
+  SELECT_SETTINGS,
+  SELECT_SHELVES,
+  SELECT_TAGS,
+  UPSERT_SETTING,
+} from '../src/storage/schema';
 import { insertState, statementsForAction, type Statement } from '../src/storage/statements';
 
 function openTestDb(): DatabaseSync {
@@ -16,6 +24,7 @@ function openTestDb(): DatabaseSync {
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(CREATE_TABLES_V1);
   run(db, insertState(createDefaultState()));
+  db.exec(CREATE_TABLES_V2);
   return db;
 }
 
@@ -75,6 +84,21 @@ describe('SQLite storage', () => {
     step({ type: 'shelf/remove', shelfId: funny.id });
     step({ type: 'item/remove', itemId: dune.id });
     expect(db.prepare('SELECT COUNT(*) AS n FROM tags').get()).toEqual(expect.objectContaining({ n: 0 }));
+  });
+
+  it('saves and overwrites settings', () => {
+    const db = openTestDb();
+    db.prepare(UPSERT_SETTING).run('themeMode', 'dark');
+    db.prepare(UPSERT_SETTING).run('themeMode', 'light');
+    db.prepare(UPSERT_SETTING).run('sortOrder', 'titleAsc');
+    const rows = db.prepare(SELECT_SETTINGS).all().map((r) => ({ ...r }));
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { key: 'themeMode', value: 'light' },
+        { key: 'sortOrder', value: 'titleAsc' },
+      ]),
+    );
+    expect(rows).toHaveLength(2);
   });
 
   it('replaces the whole state', () => {

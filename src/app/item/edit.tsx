@@ -1,7 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { Cover } from '@/components/Cover';
@@ -14,7 +14,7 @@ import { moveInArray } from '@/models/shelfReducer';
 import type { Id, Item, Tag } from '@/models/types';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
 import { deleteCover, saveCover } from '@/storage/covers';
-import { colors, fontSize, radius, spacing } from '@/theme';
+import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
 /**
  * Add or edit an item. Open with `id` to edit an existing item, or with
@@ -31,6 +31,7 @@ export default function EditItemScreen() {
     return shelf && !id ? newItemDraft(shelf) : null;
   });
   const [saving, setSaving] = useState(false);
+  const styles = useStyles();
 
   if (!draft || !shelf) return <NotFound what="item" />;
 
@@ -185,20 +186,20 @@ export default function EditItemScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   content: { padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.xl * 2 },
   coverRow: { flexDirection: 'row', gap: spacing.lg, alignItems: 'center' },
   cover: { width: 120 },
   coverButtons: { flex: 1, gap: spacing.sm },
   section: { gap: spacing.sm },
-  label: { fontSize: fontSize.small, color: colors.textMuted, fontWeight: '600' },
-  hint: { fontSize: fontSize.small, color: colors.textMuted },
+  label: { fontSize: fontSize.small, color: c.textMuted, fontWeight: '600' },
+  hint: { fontSize: fontSize.small, color: c.textMuted },
   tag: {
     gap: spacing.sm,
     padding: spacing.md,
     borderRadius: radius.md,
-    backgroundColor: colors.surface,
+    backgroundColor: c.surface,
   },
   tagHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   tagName: { flex: 1, fontWeight: '600' },
-});
+}));

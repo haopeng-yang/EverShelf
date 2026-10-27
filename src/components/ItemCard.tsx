@@ -1,7 +1,7 @@
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, Text } from 'react-native';
 
 import type { Item } from '@/models/types';
-import { colors, fontSize, spacing } from '@/theme';
+import { fontSize, makeStyles, spacing } from '@/theme';
 
 import { Cover } from './Cover';
 
@@ -13,6 +13,7 @@ interface ItemCardProps {
 
 /** One item in the shelf grid: cover with the title underneath. */
 export function ItemCard({ item, width, onPress }: ItemCardProps) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -27,7 +28,7 @@ export function ItemCard({ item, width, onPress }: ItemCardProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   pressed: { opacity: 0.7 },
-  title: { marginTop: spacing.xs, fontSize: fontSize.small, color: colors.text, fontWeight: '500' },
-});
+  title: { marginTop: spacing.xs, fontSize: fontSize.small, color: c.text, fontWeight: '500' },
+}));

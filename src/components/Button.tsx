@@ -1,6 +1,6 @@
-import { Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, Text, type StyleProp, type ViewStyle } from 'react-native';
 
-import { colors, fontSize, radius, spacing } from '@/theme';
+import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
 type Variant = 'primary' | 'secondary' | 'danger' | 'text';
 
@@ -24,6 +24,7 @@ export function Button({
   accessibilityLabel,
   style,
 }: ButtonProps) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -34,17 +35,17 @@ export function Button({
       style={({ pressed }) => [
         styles.base,
         compact && styles.compact,
-        containerStyles[variant],
+        styles[variant],
         pressed && styles.pressed,
         disabled && styles.disabled,
         style,
       ]}>
-      <Text style={[styles.label, labelStyles[variant]]}>{title}</Text>
+      <Text style={[styles.label, styles[`${variant}Label`]]}>{title}</Text>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   base: {
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
@@ -56,18 +57,12 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.6 },
   disabled: { opacity: 0.4 },
   label: { fontSize: fontSize.body, fontWeight: '600' },
-});
-
-const containerStyles = StyleSheet.create({
-  primary: { backgroundColor: colors.primary },
-  secondary: { backgroundColor: colors.surface },
-  danger: { backgroundColor: colors.surface },
+  primary: { backgroundColor: c.primary },
+  secondary: { backgroundColor: c.surface },
+  danger: { backgroundColor: c.surface },
   text: { backgroundColor: 'transparent' },
-});
-
-const labelStyles = StyleSheet.create({
-  primary: { color: colors.onPrimary },
-  secondary: { color: colors.text },
-  danger: { color: colors.danger },
-  text: { color: colors.primary },
-});
+  primaryLabel: { color: c.onPrimary },
+  secondaryLabel: { color: c.text },
+  dangerLabel: { color: c.danger },
+  textLabel: { color: c.primary },
+}));
