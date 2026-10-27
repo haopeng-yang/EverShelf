@@ -4,13 +4,17 @@
   "main": "index.ts",
   "dependencies": {
     "expo": "~58.0.19",
+    "expo-sqlite": "~58.0.14",
     "expo-status-bar": "~58.0.4",
     "react": "19.3.0",
     "react-native": "0.88.0"
   },
   "devDependencies": {
     "@types/jest": "30.0.0",
+    "@types/node": "^24.19.2",
     "@types/react": "~19.3.0",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~58.0.4",
     "jest": "~30.5.2",
     "jest-expo": "~58.0.12",
     "typescript": "~6.0.3"
@@ -21,7 +25,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "jest",
-    "test:watch": "jest --watchAll"
+    "test:watch": "jest --watchAll",
+    "lint": "expo lint"
   },
   "jest": {
     "preset": "jest-expo"

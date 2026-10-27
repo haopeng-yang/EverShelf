@@ -1,0 +1,123 @@
+import type { ShelfAction } from '../models/shelfReducer';
+import type { Item, Shelf, ShelfState } from '../models/types';
+import { itemToRow, shelfToRow, tagToRow } from './rows';
+
+export type SqlValue = string | number | null;
+
+export interface Statement {
+  sql: string;
+  params: SqlValue[];
+}
+
+/**
+ * The SQL that saves one action, given the state *after* the reducer ran.
+ * Only called for actions that changed the state.
+ *
+ * Updates use UPDATE rather than INSERT OR REPLACE: REPLACE deletes the old
+ * row first, which would cascade-delete a shelf's items or an item's tags.
+ */
+export function statementsForAction(action: ShelfAction, next: ShelfState): Statement[] {
+  switch (action.type) {
+    case 'shelf/add': {
+      const index = next.shelves.findIndex((s) => s.id === action.shelf.id);
+      return index === -1 ? [] : [insertShelf(next.shelves[index], index)];
+    }
+
+    case 'shelf/rename':
+    case 'shelf/setDefaultTags': {
+      const index = next.shelves.findIndex((s) => s.id === action.shelfId);
+      return index === -1 ? [] : [updateShelf(next.shelves[index], index)];
+    }
+
+    case 'shelf/move':
+      return next.shelves.map((s, index) => ({
+        sql: 'UPDATE shelves SET position = ? WHERE id = ?',
+        params: [index, s.id],
+      }));
+
+    case 'shelf/remove':
+      return [{ sql: 'DELETE FROM shelves WHERE id = ?', params: [action.shelfId] }];
+
+    case 'item/add': {
+      const item = next.items.find((i) => i.id === action.item.id);
+      return item ? insertItem(item) : [];
+    }
+
+    case 'item/update': {
+      const item = next.items.find((i) => i.id === action.itemId);
+      if (!item) return [];
+      return [
+        {
+          sql: 'UPDATE items SET title = ?, cover_uri = ?, updated_at = ? WHERE id = ?',
+          params: [item.title, item.coverUri, item.updatedAt, item.id],
+        },
+      ];
+    }
+
+    case 'item/remove':
+      return [{ sql: 'DELETE FROM items WHERE id = ?', params: [action.itemId] }];
+
+    case 'tag/add':
+    case 'tag/update':
+    case 'tag/move':
+    case 'tag/remove': {
+      // An item has only a handful of tags, so rewriting them all keeps
+      // positions correct without per-action bookkeeping.
+      const item = next.items.find((i) => i.id === action.itemId);
+      if (!item) return [];
+      return [
+        { sql: 'UPDATE items SET updated_at = ? WHERE id = ?', params: [item.updatedAt, item.id] },
+        { sql: 'DELETE FROM tags WHERE item_id = ?', params: [item.id] },
+        ...insertTags(item),
+      ];
+    }
+
+    case 'state/replace':
+      return [{ sql: 'DELETE FROM shelves', params: [] }, ...insertState(next)];
+  }
+}
+
+/** Inserts a whole state into empty tables (first-run seeding and imports). */
+export function insertState(state: ShelfState): Statement[] {
+  return [
+    ...state.shelves.map((s, index) => insertShelf(s, index)),
+    ...state.items.flatMap(insertItem),
+  ];
+}
+
+function insertShelf(shelf: Shelf, position: number): Statement {
+  const row = shelfToRow(shelf, position);
+  return {
+    sql: 'INSERT INTO shelves (id, name, position, default_tag_names) VALUES (?, ?, ?, ?)',
+    params: [row.id, row.name, row.position, row.default_tag_names],
+  };
+}
+
+function updateShelf(shelf: Shelf, position: number): Statement {
+  const row = shelfToRow(shelf, position);
+  return {
+    sql: 'UPDATE shelves SET name = ?, position = ?, default_tag_names = ? WHERE id = ?',
+    params: [row.name, row.position, row.default_tag_names, row.id],
+  };
+}
+
+function insertItem(item: Item): Statement[] {
+  const row = itemToRow(item);
+  return [
+    {
+      sql: 'INSERT INTO items (id, shelf_id, title, cover_uri, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      params: [row.id, row.shelf_id, row.title, row.cover_uri, row.created_at, row.updated_at],
+    },
+    ...insertTags(item),
+  ];
+}
+
+function insertTags(item: Item): Statement[] {
+  return item.tags.map((tag, index) => {
+    const row = tagToRow(item.id, tag, index);
+    return {
+      sql: 'INSERT INTO tags (id, item_id, name, value, position) VALUES (?, ?, ?, ?, ?)',
+      params: [row.id, row.item_id, row.name, row.value, row.position],
+    };
+  });
+}

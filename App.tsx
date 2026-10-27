@@ -1,3 +1,4 @@
+import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -5,13 +6,16 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { addItem, addTag } from './src/models/actions';
 import { selectItemsOnShelf } from './src/models/shelfReducer';
 import { ShelfProvider, useShelfDispatch, useShelfState } from './src/state/ShelfProvider';
+import { DATABASE_NAME, migrate } from './src/storage/database';
 
 export default function App() {
   return (
-    <ShelfProvider>
-      <ModelPreview />
-      <StatusBar style="auto" />
-    </ShelfProvider>
+    <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrate}>
+      <ShelfProvider>
+        <ModelPreview />
+        <StatusBar style="auto" />
+      </ShelfProvider>
+    </SQLiteProvider>
   );
 }
 
