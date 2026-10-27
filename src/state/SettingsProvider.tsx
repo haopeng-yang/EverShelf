@@ -6,12 +6,16 @@ import { loadSettings, saveSetting } from '@/storage/database';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 
+/** How a shelf shows its items: a grid of covers, or a list with small covers and details. */
+export type ViewMode = 'grid' | 'list';
+
 export interface Settings {
   themeMode: ThemeMode;
   sortOrder: SortOrder;
+  viewMode: ViewMode;
 }
 
-const DEFAULT_SETTINGS: Settings = { themeMode: 'system', sortOrder: 'newest' };
+const DEFAULT_SETTINGS: Settings = { themeMode: 'system', sortOrder: 'newest', viewMode: 'grid' };
 
 interface SettingsContextValue {
   settings: Settings;
@@ -56,8 +60,10 @@ export function useSettings(): SettingsContextValue {
 /** Ignores unknown or outdated stored values instead of trusting them. */
 function parseSettings(stored: Record<string, string>): Settings {
   const themeModes: ThemeMode[] = ['system', 'light', 'dark'];
+  const viewModes: ViewMode[] = ['grid', 'list'];
   return {
     themeMode: themeModes.find((m) => m === stored.themeMode) ?? DEFAULT_SETTINGS.themeMode,
     sortOrder: SORT_ORDERS.find((o) => o === stored.sortOrder) ?? DEFAULT_SETTINGS.sortOrder,
+    viewMode: viewModes.find((m) => m === stored.viewMode) ?? DEFAULT_SETTINGS.viewMode,
   };
 }

@@ -5,10 +5,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { ItemCard } from '@/components/ItemCard';
+import { ItemRow } from '@/components/ItemRow';
 import { OptionSheet } from '@/components/OptionSheet';
 import { ShelfTabs } from '@/components/ShelfTabs';
 import { TextField } from '@/components/TextField';
-import { SORT_LABELS, SORT_ORDERS, filterItems, sortItems } from '@/models/query';
+import { SORT_LABELS, SORT_ORDERS, SORT_SHORT_LABELS, filterItems, sortItems } from '@/models/query';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
 import type { Id } from '@/models/types';
 import { useSettings } from '@/state/SettingsProvider';
@@ -43,9 +44,11 @@ export default function ShelvesScreen() {
   );
   const searching = query.trim() !== '';
 
-  const columns = Math.max(2, Math.floor((width - spacing.lg * 2) / MIN_CARD_WIDTH));
+  const listView = settings.viewMode === 'list';
+  const columns = listView ? 1 : Math.max(2, Math.floor((width - spacing.lg * 2) / MIN_CARD_WIDTH));
   const cardWidth = (width - spacing.lg * 2 - spacing.md * (columns - 1)) / columns;
 
+  const openItem = (id: Id) => router.push({ pathname: '/item/[id]', params: { id } });
   const editShelf = (shelfId: Id) => router.push({ pathname: '/shelf/edit', params: { id: shelfId } });
 
   return (
@@ -81,7 +84,7 @@ export default function ShelvesScreen() {
             <TextField
               value={query}
               onChangeText={setQuery}
-              placeholder={`Search ${shelf.name}, or tag: value`}
+              placeholder={`Search ${shelf.name}`}
               autoCapitalize="none"
               autoCorrect={false}
               clearButtonMode="while-editing"
@@ -90,11 +93,18 @@ export default function ShelvesScreen() {
               accessibilityLabel="Search"
             />
             <Button
-              title={`↕ ${SORT_LABELS[settings.sortOrder]}`}
+              title={`↕ ${SORT_SHORT_LABELS[settings.sortOrder]}`}
               compact
               accessibilityLabel={`Sort: ${SORT_LABELS[settings.sortOrder]}`}
               onPress={() => setSortSheetOpen(true)}
-              style={styles.sortButton}
+              style={styles.toolbarButton}
+            />
+            <Button
+              title={listView ? '▦' : '☰'}
+              compact
+              accessibilityLabel={listView ? 'Show as grid' : 'Show as list'}
+              onPress={() => setSetting('viewMode', listView ? 'grid' : 'list')}
+              style={styles.toolbarButton}
             />
           </View>
           {searching && (
@@ -107,7 +117,7 @@ export default function ShelvesScreen() {
           )}
 
           <FlatList
-            key={columns}
+            key={listView ? 'list' : columns}
             data={items}
             numColumns={columns}
             keyExtractor={(item) => item.id}
@@ -122,13 +132,13 @@ export default function ShelvesScreen() {
                   : `Nothing on ${shelf.name} yet. Tap “Add item” to start.`}
               </Text>
             }
-            renderItem={({ item }) => (
-              <ItemCard
-                item={item}
-                width={cardWidth}
-                onPress={() => router.push({ pathname: '/item/[id]', params: { id: item.id } })}
-              />
-            )}
+            renderItem={({ item }) =>
+              listView ? (
+                <ItemRow item={item} onPress={() => openItem(item.id)} />
+              ) : (
+                <ItemCard item={item} width={cardWidth} onPress={() => openItem(item.id)} />
+              )
+            }
           />
           <Button
             title="+ Add item"
@@ -156,8 +166,8 @@ const useStyles = makeStyles((c) => ({
   container: { flex: 1, backgroundColor: c.background },
   headerButtons: { flexDirection: 'row', gap: spacing.xs },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
-  search: { flex: 1 },
-  sortButton: { paddingVertical: spacing.sm },
+  search: { flex: 1, minWidth: 0 },
+  toolbarButton: { paddingVertical: spacing.sm },
   resultsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg },
   resultsText: { fontSize: fontSize.small, color: c.textMuted },
   grid: { padding: spacing.lg, gap: spacing.lg },

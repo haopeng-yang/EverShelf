@@ -12,6 +12,15 @@ export const SORT_LABELS: Record<SortOrder, string> = {
   updated: 'Recently edited',
 };
 
+/** Short versions for the small sort button on the shelf screen. */
+export const SORT_SHORT_LABELS: Record<SortOrder, string> = {
+  newest: 'Newest',
+  oldest: 'Oldest',
+  titleAsc: 'A–Z',
+  titleDesc: 'Z–A',
+  updated: 'Edited',
+};
+
 /**
  * Search items. Two forms:
  * - `dune herbert`: every word must appear in the title or any tag's name or value.
