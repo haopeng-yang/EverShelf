@@ -1,0 +1,161 @@
+// All English text in the app. zh.ts has the same keys in Chinese.
+// {name} placeholders are filled in by t(); a key ending in _one is used instead when count is 1.
+
+export const en = {
+  // Shared
+  'common.save': 'Save',
+  'common.delete': 'Delete',
+  'common.cancel': 'Cancel',
+  'common.edit': 'Edit',
+  'common.clear': 'Clear',
+  'common.close': 'Close',
+  'common.cannotUndo': 'This cannot be undone.',
+  'common.loading': 'Loading…',
+  'common.loadFailed': 'Could not load your shelf: {error}',
+  'common.tag': 'tag',
+  'common.coverOf': 'Cover of {title}',
+
+  // Default tag names for new shelves
+  'tag.title': 'Title',
+  'tag.date': 'Date',
+  'tag.description': 'Description',
+  'tag.author': 'Author',
+  'tag.director': 'Director',
+  'tag.studio': 'Studio',
+
+  // Shelves created on first launch
+  'defaults.books': 'Books',
+  'defaults.movies': 'Movies',
+  'defaults.manga': 'Manga',
+  'defaults.anime': 'Anime',
+
+  // Shelf screen
+  'home.editShelf': 'Edit shelf',
+  'home.settings': 'Settings',
+  'home.noShelves': 'You have no shelves yet.',
+  'home.addShelf': 'Add a shelf',
+  'home.search': 'Search {shelf}',
+  'home.searchLabel': 'Search',
+  'home.sortLabel': 'Sort: {sort}',
+  'home.sortTitle': 'Sort items by',
+  'home.showGrid': 'Show as grid',
+  'home.showList': 'Show as list',
+  'home.results': '{count} results',
+  'home.results_one': '{count} result',
+  'home.noMatches': 'Nothing on {shelf} matches “{query}”.',
+  'home.empty': 'Nothing on {shelf} yet. Tap “Add item” to start.',
+  'home.addItem': '+ Add item',
+  'home.addItemTo': 'Add item to {shelf}',
+
+  // Shelf tabs
+  'tabs.add': '+ Add',
+  'tabs.addShelf': 'Add shelf',
+  'tabs.longPressHint': 'Long press to edit this shelf',
+
+  // Sorting
+  'sort.newest': 'Newest added',
+  'sort.oldest': 'Oldest added',
+  'sort.titleAsc': 'Title A–Z',
+  'sort.titleDesc': 'Title Z–A',
+  'sort.updated': 'Recently edited',
+  'sortShort.newest': 'Newest',
+  'sortShort.oldest': 'Oldest',
+  'sortShort.titleAsc': 'A–Z',
+  'sortShort.titleDesc': 'Z–A',
+  'sortShort.updated': 'Edited',
+
+  // List view
+  'row.noDetails': 'No details yet',
+
+  // Not found
+  'notFound.title': 'Not found',
+  'notFound.item': 'This item no longer exists.',
+  'notFound.shelf': 'This shelf no longer exists.',
+  'notFound.back': 'Back to shelves',
+
+  // Item detail
+  'item.fallbackTitle': 'Item',
+
+  // Add / edit item
+  'itemEdit.editTitle': 'Edit item',
+  'itemEdit.newTitle': 'New {shelf} item',
+  'itemEdit.choosePhoto': 'Choose photo',
+  'itemEdit.takePhoto': 'Take photo',
+  'itemEdit.removeCover': 'Remove cover',
+  'itemEdit.titlePlaceholder': 'e.g. Dune',
+  'itemEdit.tags': 'Tags',
+  'itemEdit.noTags': 'No tags yet.',
+  'itemEdit.tagNamePlaceholder': 'Tag name, e.g. Age Restricted',
+  'itemEdit.tagValuePlaceholder': 'Value, e.g. Recommended 15+',
+  'itemEdit.moveUp': 'Move {name} up',
+  'itemEdit.moveDown': 'Move {name} down',
+  'itemEdit.remove': 'Remove {name}',
+  'itemEdit.addTag': '+ Add tag',
+  'itemEdit.unnamedHint': 'Tags without a name are not saved.',
+  'itemEdit.deleteItem': 'Delete item',
+  'itemEdit.deleteConfirm': 'Delete “{title}”?',
+  'itemEdit.needTitle': 'Please give this item a title.',
+  'itemEdit.cameraPermission': 'EverShelf needs camera access to take a cover photo.',
+  'itemEdit.saveFailed': 'Could not save: {error}',
+
+  // Add / edit shelf
+  'shelfEdit.editTitle': 'Edit shelf',
+  'shelfEdit.newTitle': 'New shelf',
+  'shelfEdit.name': 'Name',
+  'shelfEdit.namePlaceholder': 'e.g. Funny Videos',
+  'shelfEdit.startingTags': 'Starting tags',
+  'shelfEdit.startingTagsHint': 'New items on this shelf start with these tags. Existing items are not changed.',
+  'shelfEdit.tagName': 'Tag name',
+  'shelfEdit.addStartingTag': '+ Add starting tag',
+  'shelfEdit.position': 'Position',
+  'shelfEdit.moveLeft': '← Move left',
+  'shelfEdit.moveRight': 'Move right →',
+  'shelfEdit.deleteShelf': 'Delete shelf',
+  'shelfEdit.itemCount': '{count} items on this shelf.',
+  'shelfEdit.itemCount_one': '{count} item on this shelf.',
+  'shelfEdit.needName': 'Please give this shelf a name.',
+  'shelfEdit.deleteConfirm': 'Delete shelf “{name}”?',
+  'shelfEdit.deleteEmpty': 'The shelf is empty.',
+  'shelfEdit.deleteWithItems': 'This also deletes its {count} items. This cannot be undone.',
+  'shelfEdit.deleteWithItems_one': 'This also deletes its {count} item. This cannot be undone.',
+
+  // Settings
+  'settings.title': 'Settings',
+  'settings.appearance': 'Appearance',
+  'settings.system': 'System',
+  'settings.light': 'Light',
+  'settings.dark': 'Dark',
+  'settings.appearanceHint': '“System” follows your phone’s light or dark mode.',
+  'settings.language': 'Language',
+  'settings.languageHint': '“System” follows your phone’s language.',
+  'settings.backup': 'Backup',
+  'settings.export': 'Export backup',
+  'settings.exporting': 'Exporting…',
+  'settings.import': 'Import backup',
+  'settings.importing': 'Importing…',
+  'settings.backupHint':
+    'Export saves all shelves, items, tags and covers into one file you can keep in Files, Drive or email. Import replaces everything with a backup file.',
+  'settings.summary': '{shelves} shelves · {items} items',
+  'settings.exportFailed': 'Could not export',
+  'settings.importFailed': 'Could not import',
+  'settings.replaceTitle': 'Replace your shelf with this backup?',
+  'settings.replaceMessage':
+    'The backup has {backupShelves} shelves and {backupItems} items. Your current {shelves} shelves and {items} items will be replaced. Export a backup first if you want to keep them.',
+  'settings.replace': 'Replace',
+  'settings.restoredTitle': 'Backup restored',
+  'settings.restored': 'Restored {shelves} shelves and {items} items.',
+
+  // Backup file problems
+  'backupError.notJson': 'This file is not an EverShelf backup (it is not valid JSON).',
+  'backupError.notBackup': 'This file is not an EverShelf backup.',
+  'backupError.newerVersion': 'This backup was made by a newer version of EverShelf. Please update the app first.',
+  'backupError.missingLists': 'This backup is damaged: shelves or items are missing.',
+  'backupError.duplicateShelf': 'This backup is damaged: two shelves share an id.',
+  'backupError.badShelf': 'This backup is damaged: shelf {n} is not readable.',
+  'backupError.badItem': 'This backup is damaged: item {n} is not readable.',
+  'backupError.itemShelfMissing': 'This backup is damaged: the shelf of item {n} is missing.',
+  'backupError.duplicateItem': 'This backup is damaged: item {n} has a duplicate id.',
+  'backupError.badTag': 'This backup is damaged: a tag on item {n} is not readable.',
+};
+
+export type TranslationKey = keyof typeof en;

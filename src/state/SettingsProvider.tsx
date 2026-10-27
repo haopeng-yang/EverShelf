@@ -9,13 +9,17 @@ export type ThemeMode = 'system' | 'light' | 'dark';
 /** How a shelf shows its items: a grid of covers, or a list with small covers and details. */
 export type ViewMode = 'grid' | 'list';
 
+/** App language: 'system' follows the phone's language. */
+export type LanguageSetting = 'system' | 'en' | 'zh';
+
 export interface Settings {
   themeMode: ThemeMode;
   sortOrder: SortOrder;
   viewMode: ViewMode;
+  language: LanguageSetting;
 }
 
-const DEFAULT_SETTINGS: Settings = { themeMode: 'system', sortOrder: 'newest', viewMode: 'grid' };
+const DEFAULT_SETTINGS: Settings = { themeMode: 'system', sortOrder: 'newest', viewMode: 'grid', language: 'system' };
 
 interface SettingsContextValue {
   settings: Settings;
@@ -61,7 +65,9 @@ export function useSettings(): SettingsContextValue {
 function parseSettings(stored: Record<string, string>): Settings {
   const themeModes: ThemeMode[] = ['system', 'light', 'dark'];
   const viewModes: ViewMode[] = ['grid', 'list'];
+  const languages: LanguageSetting[] = ['system', 'en', 'zh'];
   return {
+    language: languages.find((l) => l === stored.language) ?? DEFAULT_SETTINGS.language,
     themeMode: themeModes.find((m) => m === stored.themeMode) ?? DEFAULT_SETTINGS.themeMode,
     sortOrder: SORT_ORDERS.find((o) => o === stored.sortOrder) ?? DEFAULT_SETTINGS.sortOrder,
     viewMode: viewModes.find((m) => m === stored.viewMode) ?? DEFAULT_SETTINGS.viewMode,

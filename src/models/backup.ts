@@ -1,3 +1,4 @@
+import { translate } from '../i18n';
 import type { Id, Item, Shelf, ShelfState, Tag } from './types';
 
 // A backup is one JSON file holding every shelf and item. Covers are embedded
@@ -24,7 +25,27 @@ export interface ParsedBackup {
   covers: Map<Id, string>;
 }
 
-export class BackupError extends Error {}
+export type BackupErrorCode =
+  | 'notJson'
+  | 'notBackup'
+  | 'newerVersion'
+  | 'missingLists'
+  | 'duplicateShelf'
+  | 'badShelf'
+  | 'badItem'
+  | 'itemShelfMissing'
+  | 'duplicateItem'
+  | 'badTag';
+
+/** A problem with a backup file. `code` + `params` let screens show it in any language; `message` is English. */
+export class BackupError extends Error {
+  constructor(
+    readonly code: BackupErrorCode,
+    readonly params: { n?: number } = {},
+  ) {
+    super(translate('en', `backupError.${code}`, params));
+  }
+}
 
 /** `covers` maps item id -> cover data URI, for items that have one. */
 export function createBackup(state: ShelfState, covers: Map<Id, string>, exportedAt: Date): BackupFile {
@@ -43,33 +64,31 @@ export function parseBackup(text: string): ParsedBackup {
   try {
     data = JSON.parse(text);
   } catch {
-    throw new BackupError('This file is not an EverShelf backup (it is not valid JSON).');
+    throw new BackupError('notJson');
   }
-  if (!isObject(data) || data.app !== 'EverShelf') {
-    throw new BackupError('This file is not an EverShelf backup.');
-  }
+  if (!isObject(data) || data.app !== 'EverShelf') throw new BackupError('notBackup');
   if (typeof data.version !== 'number' || data.version > BACKUP_FORMAT_VERSION) {
-    throw new BackupError('This backup was made by a newer version of EverShelf. Please update the app first.');
+    throw new BackupError('newerVersion');
   }
-  if (!Array.isArray(data.shelves) || !Array.isArray(data.items)) {
-    throw new BackupError('This backup is damaged: shelves or items are missing.');
-  }
+  if (!Array.isArray(data.shelves) || !Array.isArray(data.items)) throw new BackupError('missingLists');
 
-  const shelves = data.shelves.map((s, i) => parseShelf(s, i));
+  const shelves = data.shelves.map((s, i) => parseShelf(s, i + 1));
   const shelfIds = new Set(shelves.map((s) => s.id));
-  if (shelfIds.size !== shelves.length) throw new BackupError('This backup is damaged: two shelves share an id.');
+  if (shelfIds.size !== shelves.length) throw new BackupError('duplicateShelf');
 
   const covers = new Map<Id, string>();
   const itemIds = new Set<Id>();
   const items = data.items.map((raw, i): Item => {
-    const where = `item ${i + 1}`;
-    if (!isObject(raw)) throw damaged(where);
+    const n = i + 1;
+    if (!isObject(raw)) throw new BackupError('badItem', { n });
     const { id, shelfId, title, cover, tags, createdAt, updatedAt } = raw;
-    if (typeof id !== 'string' || typeof shelfId !== 'string' || typeof title !== 'string') throw damaged(where);
-    if (!shelfIds.has(shelfId)) throw damaged(`${where} (its shelf is missing)`);
-    if (itemIds.has(id)) throw damaged(`${where} (duplicate id)`);
+    if (typeof id !== 'string' || typeof shelfId !== 'string' || typeof title !== 'string') {
+      throw new BackupError('badItem', { n });
+    }
+    if (!shelfIds.has(shelfId)) throw new BackupError('itemShelfMissing', { n });
+    if (itemIds.has(id)) throw new BackupError('duplicateItem', { n });
     itemIds.add(id);
-    if (!Array.isArray(tags)) throw damaged(where);
+    if (!Array.isArray(tags)) throw new BackupError('badItem', { n });
     if (typeof cover === 'string' && cover.startsWith('data:image/')) covers.set(id, cover);
     const now = Date.now();
     return {
@@ -77,7 +96,7 @@ export function parseBackup(text: string): ParsedBackup {
       shelfId,
       title,
       coverUri: null,
-      tags: tags.map((t) => parseTag(t, where)),
+      tags: tags.map((t) => parseTag(t, n)),
       createdAt: typeof createdAt === 'number' ? createdAt : now,
       updatedAt: typeof updatedAt === 'number' ? updatedAt : now,
     };
@@ -86,9 +105,10 @@ export function parseBackup(text: string): ParsedBackup {
   return { state: { shelves, items }, covers };
 }
 
-function parseShelf(raw: unknown, index: number): Shelf {
-  const where = `shelf ${index + 1}`;
-  if (!isObject(raw) || typeof raw.id !== 'string' || typeof raw.name !== 'string') throw damaged(where);
+function parseShelf(raw: unknown, n: number): Shelf {
+  if (!isObject(raw) || typeof raw.id !== 'string' || typeof raw.name !== 'string') {
+    throw new BackupError('badShelf', { n });
+  }
   const defaults = Array.isArray(raw.defaultTagNames) ? raw.defaultTagNames : [];
   return {
     id: raw.id,
@@ -97,15 +117,12 @@ function parseShelf(raw: unknown, index: number): Shelf {
   };
 }
 
-function parseTag(raw: unknown, where: string): Tag {
+/** `n` is the 1-based number of the item the tag belongs to. */
+function parseTag(raw: unknown, n: number): Tag {
   if (!isObject(raw) || typeof raw.id !== 'string' || typeof raw.name !== 'string' || typeof raw.value !== 'string') {
-    throw damaged(`a tag on ${where}`);
+    throw new BackupError('badTag', { n });
   }
   return { id: raw.id, name: raw.name, value: raw.value };
-}
-
-function damaged(where: string): BackupError {
-  return new BackupError(`This backup is damaged: ${where} is not readable.`);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

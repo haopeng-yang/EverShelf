@@ -1,5 +1,7 @@
+import { getLocales } from 'expo-localization';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { languageFromCode } from '../i18n';
 import { createDefaultState } from '../models/defaults';
 import type { ShelfState } from '../models/types';
 import { rowsToState, type ItemRow, type ShelfRow, type TagRow } from './rows';
@@ -28,8 +30,9 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
     if (version < 1) {
       await db.execAsync(CREATE_TABLES_V1);
       // Seed the starting shelves only on a fresh install, so shelves the
-      // user deletes later don't come back.
-      for (const s of insertState(createDefaultState())) await db.runAsync(s.sql, s.params);
+      // user deletes later don't come back. They're named in the phone's language.
+      const language = languageFromCode(getLocales()[0]?.languageCode);
+      for (const s of insertState(createDefaultState(language))) await db.runAsync(s.sql, s.params);
     }
     if (version < 2) {
       await db.execAsync(CREATE_TABLES_V2);

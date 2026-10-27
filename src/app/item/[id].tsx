@@ -4,6 +4,7 @@ import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { Button } from '@/components/Button';
 import { Cover } from '@/components/Cover';
 import { NotFound } from '@/components/NotFound';
+import { useT } from '@/i18n/useT';
 import { useShelfState } from '@/state/ShelfProvider';
 import { fontSize, makeStyles, spacing } from '@/theme';
 
@@ -14,6 +15,7 @@ export default function ItemScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const state = useShelfState();
   const styles = useStyles();
+  const t = useT();
   const { width } = useWindowDimensions();
   const item = state.items.find((i) => i.id === id);
   if (!item) return <NotFound what="item" />;
@@ -23,7 +25,7 @@ export default function ItemScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Stack.Screen options={{ title: shelf?.name ?? 'Item' }} />
+      <Stack.Screen options={{ title: shelf?.name ?? t('item.fallbackTitle') }} />
 
       <View style={sideBySide ? styles.row : styles.column}>
         <Cover
@@ -32,7 +34,7 @@ export default function ItemScreen() {
           style={sideBySide ? styles.coverSide : [styles.coverTop, { width: Math.min(width * 0.6, 260) }]}
         />
         <View style={[styles.fields, sideBySide && styles.fieldsSide]}>
-          <Field name="Title" value={item.title} />
+          <Field name={t('tag.title')} value={item.title} />
           {item.tags.map((tag) => (
             <Field key={tag.id} name={tag.name} value={tag.value} />
           ))}
@@ -41,7 +43,7 @@ export default function ItemScreen() {
 
       <View style={styles.footer}>
         <Button
-          title="Edit"
+          title={t('common.edit')}
           variant="primary"
           onPress={() => router.push({ pathname: '/item/edit', params: { id: item.id } })}
         />

@@ -9,7 +9,8 @@ import { ItemRow } from '@/components/ItemRow';
 import { OptionSheet } from '@/components/OptionSheet';
 import { ShelfTabs } from '@/components/ShelfTabs';
 import { TextField } from '@/components/TextField';
-import { SORT_LABELS, SORT_ORDERS, SORT_SHORT_LABELS, filterItems, sortItems } from '@/models/query';
+import { useT } from '@/i18n/useT';
+import { SORT_ORDERS, filterItems, sortItems } from '@/models/query';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
 import type { Id } from '@/models/types';
 import { useSettings } from '@/state/SettingsProvider';
@@ -17,12 +18,13 @@ import { useShelfState } from '@/state/ShelfProvider';
 import { fontSize, makeStyles, spacing } from '@/theme';
 
 const MIN_CARD_WIDTH = 140;
-const SORT_OPTIONS = SORT_ORDERS.map((value) => ({ value, label: SORT_LABELS[value] }));
 
 export default function ShelvesScreen() {
   const state = useShelfState();
   const { settings, setSetting } = useSettings();
   const styles = useStyles();
+  const t = useT();
+  const sortOptions = SORT_ORDERS.map((value) => ({ value, label: t(`sort.${value}`) }));
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [selectedId, setSelectedId] = useState<Id | undefined>(state.shelves[0]?.id);
@@ -58,8 +60,10 @@ export default function ShelvesScreen() {
           title: 'EverShelf',
           headerRight: () => (
             <View style={styles.headerButtons}>
-              {shelf && <Button title="Edit shelf" variant="text" compact onPress={() => editShelf(shelf.id)} />}
-              <Button title="Settings" variant="text" compact onPress={() => router.push('/settings')} />
+              {shelf && (
+                <Button title={t('home.editShelf')} variant="text" compact onPress={() => editShelf(shelf.id)} />
+              )}
+              <Button title={t('home.settings')} variant="text" compact onPress={() => router.push('/settings')} />
             </View>
           ),
         }}
@@ -75,8 +79,8 @@ export default function ShelvesScreen() {
 
       {!shelf ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>You have no shelves yet.</Text>
-          <Button title="Add a shelf" variant="primary" onPress={() => router.push('/shelf/edit')} />
+          <Text style={styles.emptyText}>{t('home.noShelves')}</Text>
+          <Button title={t('home.addShelf')} variant="primary" onPress={() => router.push('/shelf/edit')} />
         </View>
       ) : (
         <>
@@ -84,35 +88,33 @@ export default function ShelvesScreen() {
             <TextField
               value={query}
               onChangeText={setQuery}
-              placeholder={`Search ${shelf.name}`}
+              placeholder={t('home.search', { shelf: shelf.name })}
               autoCapitalize="none"
               autoCorrect={false}
               clearButtonMode="while-editing"
               returnKeyType="search"
               style={styles.search}
-              accessibilityLabel="Search"
+              accessibilityLabel={t('home.searchLabel')}
             />
             <Button
-              title={`↕ ${SORT_SHORT_LABELS[settings.sortOrder]}`}
+              title={`↕ ${t(`sortShort.${settings.sortOrder}`)}`}
               compact
-              accessibilityLabel={`Sort: ${SORT_LABELS[settings.sortOrder]}`}
+              accessibilityLabel={t('home.sortLabel', { sort: t(`sort.${settings.sortOrder}`) })}
               onPress={() => setSortSheetOpen(true)}
               style={styles.toolbarButton}
             />
             <Button
               title={listView ? '▦' : '☰'}
               compact
-              accessibilityLabel={listView ? 'Show as grid' : 'Show as list'}
+              accessibilityLabel={listView ? t('home.showGrid') : t('home.showList')}
               onPress={() => setSetting('viewMode', listView ? 'grid' : 'list')}
               style={styles.toolbarButton}
             />
           </View>
           {searching && (
             <View style={styles.resultsRow}>
-              <Text style={styles.resultsText}>
-                {items.length} {items.length === 1 ? 'result' : 'results'}
-              </Text>
-              <Button title="Clear" variant="text" compact onPress={() => setQuery('')} />
+              <Text style={styles.resultsText}>{t('home.results', { count: items.length })}</Text>
+              <Button title={t('common.clear')} variant="text" compact onPress={() => setQuery('')} />
             </View>
           )}
 
@@ -128,8 +130,8 @@ export default function ShelvesScreen() {
             ListEmptyComponent={
               <Text style={styles.emptyText}>
                 {searching
-                  ? `Nothing on ${shelf.name} matches “${query.trim()}”.`
-                  : `Nothing on ${shelf.name} yet. Tap “Add item” to start.`}
+                  ? t('home.noMatches', { shelf: shelf.name, query: query.trim() })
+                  : t('home.empty', { shelf: shelf.name })}
               </Text>
             }
             renderItem={({ item }) =>
@@ -141,9 +143,9 @@ export default function ShelvesScreen() {
             }
           />
           <Button
-            title="+ Add item"
+            title={t('home.addItem')}
             variant="primary"
-            accessibilityLabel={`Add item to ${shelf.name}`}
+            accessibilityLabel={t('home.addItemTo', { shelf: shelf.name })}
             style={[styles.fab, { bottom: insets.bottom + spacing.lg }]}
             onPress={() => router.push({ pathname: '/item/edit', params: { shelfId: shelf.id } })}
           />
@@ -152,8 +154,8 @@ export default function ShelvesScreen() {
 
       <OptionSheet
         visible={sortSheetOpen}
-        title="Sort items by"
-        options={SORT_OPTIONS}
+        title={t('home.sortTitle')}
+        options={sortOptions}
         selected={settings.sortOrder}
         onSelect={(order) => setSetting('sortOrder', order)}
         onClose={() => setSortSheetOpen(false)}

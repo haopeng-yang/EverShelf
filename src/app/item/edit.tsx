@@ -8,6 +8,7 @@ import { Cover } from '@/components/Cover';
 import { confirm, showMessage } from '@/components/dialogs';
 import { NotFound } from '@/components/NotFound';
 import { TextField } from '@/components/TextField';
+import { useT } from '@/i18n/useT';
 import { newItemDraft } from '@/models/actions';
 import { newId } from '@/models/ids';
 import { moveInArray } from '@/models/shelfReducer';
@@ -24,10 +25,11 @@ export default function EditItemScreen() {
   const { id, shelfId } = useLocalSearchParams<{ id?: string; shelfId?: string }>();
   const state = useShelfState();
   const dispatch = useShelfDispatch();
+  const t = useT();
   const original = id ? state.items.find((i) => i.id === id) : undefined;
   const shelf = state.shelves.find((s) => s.id === (original?.shelfId ?? shelfId));
   const [draft, setDraft] = useState<Item | null>(() => {
-    if (original) return { ...original, tags: original.tags.map((t) => ({ ...t })) };
+    if (original) return { ...original, tags: original.tags.map((tag) => ({ ...tag })) };
     return shelf && !id ? newItemDraft(shelf) : null;
   });
   const [saving, setSaving] = useState(false);
@@ -37,8 +39,8 @@ export default function EditItemScreen() {
 
   const update = (changes: Partial<Item>) => setDraft((d) => d && { ...d, ...changes });
   const updateTag = (tagId: Id, changes: Partial<Tag>) =>
-    setDraft((d) => d && { ...d, tags: d.tags.map((t) => (t.id === tagId ? { ...t, ...changes } : t)) });
-  const removeTag = (tagId: Id) => setDraft((d) => d && { ...d, tags: d.tags.filter((t) => t.id !== tagId) });
+    setDraft((d) => d && { ...d, tags: d.tags.map((tag) => (tag.id === tagId ? { ...tag, ...changes } : tag)) });
+  const removeTag = (tagId: Id) => setDraft((d) => d && { ...d, tags: d.tags.filter((tag) => tag.id !== tagId) });
   const moveTag = (index: number, delta: number) =>
     setDraft((d) => d && { ...d, tags: moveInArray(d.tags, index, index + delta) });
   const addTag = () => setDraft((d) => d && { ...d, tags: [...d.tags, { id: newId(), name: '', value: '' }] });
@@ -54,7 +56,7 @@ export default function EditItemScreen() {
     if (source === 'camera') {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        showMessage('EverShelf needs camera access to take a cover photo.');
+        showMessage(t('itemEdit.cameraPermission'));
         return;
       }
       result = await ImagePicker.launchCameraAsync(options);
@@ -69,7 +71,7 @@ export default function EditItemScreen() {
     if (!draft) return;
     const title = draft.title.trim();
     if (!title) {
-      showMessage('Please give this item a title.');
+      showMessage(t('itemEdit.needTitle'));
       return;
     }
     setSaving(true);
@@ -78,8 +80,8 @@ export default function EditItemScreen() {
       const coverUri =
         draft.coverUri && draft.coverUri !== original?.coverUri ? await saveCover(draft.coverUri) : draft.coverUri;
       const tags = draft.tags
-        .filter((t) => t.name.trim())
-        .map((t) => ({ ...t, name: t.name.trim(), value: t.value.trim() }));
+        .filter((tag) => tag.name.trim())
+        .map((tag) => ({ ...tag, name: tag.name.trim(), value: tag.value.trim() }));
       const item: Item = { ...draft, title, coverUri, tags };
       const now = Date.now();
 
@@ -92,13 +94,19 @@ export default function EditItemScreen() {
       router.back();
     } catch (error) {
       setSaving(false);
-      showMessage(`Could not save: ${String(error)}`);
+      showMessage(t('itemEdit.saveFailed', { error: String(error) }));
     }
   }
 
   async function remove() {
     if (!original) return;
-    if (!(await confirm(`Delete “${original.title}”?`, 'This cannot be undone.'))) return;
+    const ok = await confirm(
+      t('itemEdit.deleteConfirm', { title: original.title }),
+      t('common.cannotUndo'),
+      t('common.delete'),
+      t('common.cancel'),
+    );
+    if (!ok) return;
     dispatch({ type: 'item/remove', itemId: original.id });
     deleteCover(original.coverUri);
     router.dismissTo('/');
@@ -108,80 +116,87 @@ export default function EditItemScreen() {
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       <Stack.Screen
         options={{
-          title: original ? 'Edit item' : `New ${shelf.name} item`,
-          headerRight: () => <Button title="Save" variant="text" compact disabled={saving} onPress={save} />,
+          title: original ? t('itemEdit.editTitle') : t('itemEdit.newTitle', { shelf: shelf.name }),
+          headerRight: () => (
+            <Button title={t('common.save')} variant="text" compact disabled={saving} onPress={save} />
+          ),
         }}
       />
 
       <View style={styles.coverRow}>
         <Cover uri={draft.coverUri} title={draft.title || '?'} style={styles.cover} />
         <View style={styles.coverButtons}>
-          <Button title="Choose photo" onPress={() => pickCover('library')} />
-          {Platform.OS !== 'web' && <Button title="Take photo" onPress={() => pickCover('camera')} />}
-          {draft.coverUri && <Button title="Remove cover" variant="danger" onPress={() => update({ coverUri: null })} />}
+          <Button title={t('itemEdit.choosePhoto')} onPress={() => pickCover('library')} />
+          {Platform.OS !== 'web' && <Button title={t('itemEdit.takePhoto')} onPress={() => pickCover('camera')} />}
+          {draft.coverUri && (
+            <Button title={t('itemEdit.removeCover')} variant="danger" onPress={() => update({ coverUri: null })} />
+          )}
         </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.label}>Title</Text>
+        <Text style={styles.label}>{t('tag.title')}</Text>
         <TextField
           value={draft.title}
           onChangeText={(title) => update({ title })}
-          placeholder="e.g. Dune"
+          placeholder={t('itemEdit.titlePlaceholder')}
           autoFocus={!original}
           returnKeyType="done"
         />
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.label}>Tags</Text>
-        {draft.tags.length === 0 && <Text style={styles.hint}>No tags yet.</Text>}
-        {draft.tags.map((tag, index) => (
-          <View key={tag.id} style={styles.tag}>
-            <View style={styles.tagHeader}>
+        <Text style={styles.label}>{t('itemEdit.tags')}</Text>
+        {draft.tags.length === 0 && <Text style={styles.hint}>{t('itemEdit.noTags')}</Text>}
+        {draft.tags.map((tag, index) => {
+          const name = tag.name || t('common.tag');
+          return (
+            <View key={tag.id} style={styles.tag}>
+              <View style={styles.tagHeader}>
+                <TextField
+                  value={tag.name}
+                  onChangeText={(text) => updateTag(tag.id, { name: text })}
+                  placeholder={t('itemEdit.tagNamePlaceholder')}
+                  style={styles.tagName}
+                />
+                <Button
+                  title="↑"
+                  compact
+                  variant="text"
+                  accessibilityLabel={t('itemEdit.moveUp', { name })}
+                  disabled={index === 0}
+                  onPress={() => moveTag(index, -1)}
+                />
+                <Button
+                  title="↓"
+                  compact
+                  variant="text"
+                  accessibilityLabel={t('itemEdit.moveDown', { name })}
+                  disabled={index === draft.tags.length - 1}
+                  onPress={() => moveTag(index, 1)}
+                />
+                <Button
+                  title="✕"
+                  compact
+                  variant="danger"
+                  accessibilityLabel={t('itemEdit.remove', { name })}
+                  onPress={() => removeTag(tag.id)}
+                />
+              </View>
               <TextField
-                value={tag.name}
-                onChangeText={(name) => updateTag(tag.id, { name })}
-                placeholder="Tag name, e.g. Age Restricted"
-                style={styles.tagName}
-              />
-              <Button
-                title="↑"
-                compact
-                variant="text"
-                accessibilityLabel={`Move ${tag.name || 'tag'} up`}
-                disabled={index === 0}
-                onPress={() => moveTag(index, -1)}
-              />
-              <Button
-                title="↓"
-                compact
-                variant="text"
-                accessibilityLabel={`Move ${tag.name || 'tag'} down`}
-                disabled={index === draft.tags.length - 1}
-                onPress={() => moveTag(index, 1)}
-              />
-              <Button
-                title="✕"
-                compact
-                variant="danger"
-                accessibilityLabel={`Remove ${tag.name || 'tag'}`}
-                onPress={() => removeTag(tag.id)}
+                value={tag.value}
+                onChangeText={(value) => updateTag(tag.id, { value })}
+                placeholder={t('itemEdit.tagValuePlaceholder')}
+                multiline
               />
             </View>
-            <TextField
-              value={tag.value}
-              onChangeText={(value) => updateTag(tag.id, { value })}
-              placeholder="Value, e.g. Recommended 15+"
-              multiline
-            />
-          </View>
-        ))}
-        <Button title="+ Add tag" onPress={addTag} />
-        <Text style={styles.hint}>Tags without a name are not saved.</Text>
+          );
+        })}
+        <Button title={t('itemEdit.addTag')} onPress={addTag} />
+        <Text style={styles.hint}>{t('itemEdit.unnamedHint')}</Text>
       </View>
 
-      {original && <Button title="Delete item" variant="danger" onPress={remove} />}
+      {original && <Button title={t('itemEdit.deleteItem')} variant="danger" onPress={remove} />}
     </ScrollView>
   );
 }

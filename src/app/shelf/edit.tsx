@@ -6,6 +6,7 @@ import { Button } from '@/components/Button';
 import { confirm, showMessage } from '@/components/dialogs';
 import { NotFound } from '@/components/NotFound';
 import { TextField } from '@/components/TextField';
+import { useT } from '@/i18n/useT';
 import { addShelf } from '@/models/actions';
 import { newId } from '@/models/ids';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
@@ -24,12 +25,13 @@ export default function EditShelfScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const state = useShelfState();
   const dispatch = useShelfDispatch();
+  const t = useT();
   const index = id ? state.shelves.findIndex((s) => s.id === id) : -1;
   const shelf = index === -1 ? undefined : state.shelves[index];
 
   const [name, setName] = useState(shelf?.name ?? '');
   const [tagNames, setTagNames] = useState<TagNameRow[]>(() =>
-    (shelf?.defaultTagNames ?? ['Date', 'Description']).map((n) => ({ key: newId(), name: n })),
+    (shelf?.defaultTagNames ?? [t('tag.date'), t('tag.description')]).map((n) => ({ key: newId(), name: n })),
   );
   const styles = useStyles();
 
@@ -40,10 +42,10 @@ export default function EditShelfScreen() {
   function save() {
     const trimmed = name.trim();
     if (!trimmed) {
-      showMessage('Please give this shelf a name.');
+      showMessage(t('shelfEdit.needName'));
       return;
     }
-    const defaults = tagNames.map((t) => t.name.trim()).filter(Boolean);
+    const defaults = tagNames.map((row) => row.name.trim()).filter(Boolean);
     if (shelf) {
       dispatch({ type: 'shelf/rename', shelfId: shelf.id, name: trimmed });
       dispatch({ type: 'shelf/setDefaultTags', shelfId: shelf.id, defaultTagNames: defaults });
@@ -57,8 +59,14 @@ export default function EditShelfScreen() {
     if (!shelf) return;
     const items = selectItemsOnShelf(state, shelf.id);
     const message =
-      items.length === 0 ? 'The shelf is empty.' : `This also deletes its ${items.length} item(s). This cannot be undone.`;
-    if (!(await confirm(`Delete shelf “${shelf.name}”?`, message))) return;
+      items.length === 0 ? t('shelfEdit.deleteEmpty') : t('shelfEdit.deleteWithItems', { count: items.length });
+    const ok = await confirm(
+      t('shelfEdit.deleteConfirm', { name: shelf.name }),
+      message,
+      t('common.delete'),
+      t('common.cancel'),
+    );
+    if (!ok) return;
     dispatch({ type: 'shelf/remove', shelfId: shelf.id });
     items.forEach((item) => deleteCover(item.coverUri));
     router.back();
@@ -68,19 +76,24 @@ export default function EditShelfScreen() {
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       <Stack.Screen
         options={{
-          title: shelf ? 'Edit shelf' : 'New shelf',
-          headerRight: () => <Button title="Save" variant="text" compact onPress={save} />,
+          title: shelf ? t('shelfEdit.editTitle') : t('shelfEdit.newTitle'),
+          headerRight: () => <Button title={t('common.save')} variant="text" compact onPress={save} />,
         }}
       />
 
       <View style={styles.section}>
-        <Text style={styles.label}>Name</Text>
-        <TextField value={name} onChangeText={setName} placeholder="e.g. Funny Videos" autoFocus={!shelf} />
+        <Text style={styles.label}>{t('shelfEdit.name')}</Text>
+        <TextField
+          value={name}
+          onChangeText={setName}
+          placeholder={t('shelfEdit.namePlaceholder')}
+          autoFocus={!shelf}
+        />
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.label}>Starting tags</Text>
-        <Text style={styles.hint}>New items on this shelf start with these tags. Existing items are not changed.</Text>
+        <Text style={styles.label}>{t('shelfEdit.startingTags')}</Text>
+        <Text style={styles.hint}>{t('shelfEdit.startingTagsHint')}</Text>
         {tagNames.map((row) => (
           <View key={row.key} style={styles.tagRow}>
             <TextField
@@ -88,34 +101,37 @@ export default function EditShelfScreen() {
               onChangeText={(text) =>
                 setTagNames((rows) => rows.map((r) => (r.key === row.key ? { ...r, name: text } : r)))
               }
-              placeholder="Tag name"
+              placeholder={t('shelfEdit.tagName')}
               style={styles.tagInput}
             />
             <Button
               title="✕"
               compact
               variant="danger"
-              accessibilityLabel={`Remove ${row.name || 'tag'}`}
+              accessibilityLabel={t('itemEdit.remove', { name: row.name || t('common.tag') })}
               onPress={() => setTagNames((rows) => rows.filter((r) => r.key !== row.key))}
             />
           </View>
         ))}
-        <Button title="+ Add starting tag" onPress={() => setTagNames((rows) => [...rows, { key: newId(), name: '' }])} />
+        <Button
+          title={t('shelfEdit.addStartingTag')}
+          onPress={() => setTagNames((rows) => [...rows, { key: newId(), name: '' }])}
+        />
       </View>
 
       {shelf && (
         <>
           <View style={styles.section}>
-            <Text style={styles.label}>Position</Text>
+            <Text style={styles.label}>{t('shelfEdit.position')}</Text>
             <View style={styles.moveRow}>
               <Button
-                title="← Move left"
+                title={t('shelfEdit.moveLeft')}
                 disabled={index === 0}
                 style={styles.moveButton}
                 onPress={() => dispatch({ type: 'shelf/move', shelfId: shelf.id, toIndex: index - 1 })}
               />
               <Button
-                title="Move right →"
+                title={t('shelfEdit.moveRight')}
                 disabled={index === state.shelves.length - 1}
                 style={styles.moveButton}
                 onPress={() => dispatch({ type: 'shelf/move', shelfId: shelf.id, toIndex: index + 1 })}
@@ -124,8 +140,8 @@ export default function EditShelfScreen() {
           </View>
 
           <View style={styles.dangerZone}>
-            <Button title="Delete shelf" variant="danger" onPress={remove} />
-            <Text style={styles.hint}>{itemCount} item(s) on this shelf.</Text>
+            <Button title={t('shelfEdit.deleteShelf')} variant="danger" onPress={remove} />
+            <Text style={styles.hint}>{t('shelfEdit.itemCount', { count: itemCount })}</Text>
           </View>
         </>
       )}

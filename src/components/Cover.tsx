@@ -1,5 +1,6 @@
 import { Image, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { useT } from '@/i18n/useT';
 import { coverAspectRatio, fontSize, makeStyles, radius } from '@/theme';
 
 interface CoverProps {
@@ -12,10 +13,11 @@ interface CoverProps {
 /** An item's cover at a 2:3 ratio, or a grey box with the title's first letter. */
 export function Cover({ uri, title, style }: CoverProps) {
   const styles = useStyles();
+  const t = useT();
   return (
     <View style={[styles.frame, style]}>
       {uri ? (
-        <Image source={{ uri }} style={styles.image} resizeMode="cover" accessibilityLabel={`Cover of ${title}`} />
+        <Image source={{ uri }} style={styles.image} resizeMode="cover" accessibilityLabel={t('common.coverOf', { title })} />
       ) : (
         <Text style={styles.letter}>{title.trim().charAt(0).toUpperCase()}</Text>
       )}

@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { Text, View } from 'react-native';
 
+import { useT } from '@/i18n/useT';
 import { makeStyles } from '@/theme';
 
 import { shelfReducer, type ShelfAction } from '../models/shelfReducer';
@@ -31,6 +32,7 @@ export function ShelfProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef<ShelfState | null>(null);
   // Chain of pending writes, so saves happen in the same order as the changes.
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const t = useT();
 
   useEffect(() => {
     loadState(db)
@@ -58,8 +60,8 @@ export function ShelfProvider({ children }: { children: ReactNode }) {
     [db],
   );
 
-  if (loadError) return <Message text={`Could not load your shelf: ${loadError}`} />;
-  if (!state) return <Message text="Loading…" />;
+  if (loadError) return <Message text={t('common.loadFailed', { error: loadError })} />;
+  if (!state) return <Message text={t('common.loading')} />;
 
   return (
     <ShelfStateContext.Provider value={state}>

@@ -1,5 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 
+import { useT } from '@/i18n/useT';
 import type { Id, Shelf } from '@/models/types';
 import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
@@ -15,6 +16,7 @@ interface ShelfTabsProps {
 /** The row of shelf tabs across the top, scrolling sideways when there are many. */
 export function ShelfTabs({ shelves, selectedId, onSelect, onEditShelf, onAddShelf }: ShelfTabsProps) {
   const styles = useStyles();
+  const t = useT();
   return (
     <ScrollView
       horizontal
@@ -28,7 +30,7 @@ export function ShelfTabs({ shelves, selectedId, onSelect, onEditShelf, onAddShe
             key={shelf.id}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
-            accessibilityHint="Long press to edit this shelf"
+            accessibilityHint={t('tabs.longPressHint')}
             onPress={() => onSelect(shelf.id)}
             onLongPress={() => onEditShelf(shelf.id)}
             style={({ pressed }) => [styles.tab, selected && styles.tabSelected, pressed && styles.pressed]}>
@@ -38,10 +40,10 @@ export function ShelfTabs({ shelves, selectedId, onSelect, onEditShelf, onAddShe
       })}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Add shelf"
+        accessibilityLabel={t('tabs.addShelf')}
         onPress={onAddShelf}
         style={({ pressed }) => [styles.tab, styles.addTab, pressed && styles.pressed]}>
-        <Text style={styles.addLabel}>+ Add</Text>
+        <Text style={styles.addLabel}>{t('tabs.add')}</Text>
       </Pressable>
     </ScrollView>
   );

@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from 'react-native';
 
+import { useT } from '@/i18n/useT';
 import type { Item } from '@/models/types';
 import { fontSize, makeStyles, spacing } from '@/theme';
 
@@ -16,7 +17,8 @@ interface ItemRowProps {
 /** One item in list view: small cover on the left, title and the first few filled-in tags on the right. */
 export function ItemRow({ item, onPress }: ItemRowProps) {
   const styles = useStyles();
-  const summary = item.tags.filter((t) => t.value.trim()).slice(0, SUMMARY_TAGS);
+  const t = useT();
+  const summary = item.tags.filter((tag) => tag.value.trim()).slice(0, SUMMARY_TAGS);
   return (
     <Pressable
       accessibilityRole="button"
@@ -29,7 +31,7 @@ export function ItemRow({ item, onPress }: ItemRowProps) {
           {item.title}
         </Text>
         {summary.length === 0 ? (
-          <Text style={styles.detail}>No details yet</Text>
+          <Text style={styles.detail}>{t('row.noDetails')}</Text>
         ) : (
           summary.map((tag) => (
             <Text key={tag.id} style={styles.detail} numberOfLines={1}>

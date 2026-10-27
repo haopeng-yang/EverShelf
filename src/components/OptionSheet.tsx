@@ -1,6 +1,7 @@
 import { Modal, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useT } from '@/i18n/useT';
 import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
 interface OptionSheetProps<T extends string> {
@@ -16,9 +17,10 @@ interface OptionSheetProps<T extends string> {
 export function OptionSheet<T extends string>({ visible, title, options, selected, onSelect, onClose }: OptionSheetProps<T>) {
   const styles = useStyles();
   const insets = useSafeAreaInsets();
+  const t = useT();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
+      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel={t('common.close')} />
       <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
         <Text style={styles.title}>{title}</Text>
         {options.map((option) => {

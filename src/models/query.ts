@@ -2,24 +2,8 @@ import type { Item } from './types';
 
 export type SortOrder = 'newest' | 'oldest' | 'titleAsc' | 'titleDesc' | 'updated';
 
+/** Labels live in the translation files as sort.<order> and sortShort.<order>. */
 export const SORT_ORDERS: SortOrder[] = ['newest', 'oldest', 'titleAsc', 'titleDesc', 'updated'];
-
-export const SORT_LABELS: Record<SortOrder, string> = {
-  newest: 'Newest added',
-  oldest: 'Oldest added',
-  titleAsc: 'Title A–Z',
-  titleDesc: 'Title Z–A',
-  updated: 'Recently edited',
-};
-
-/** Short versions for the small sort button on the shelf screen. */
-export const SORT_SHORT_LABELS: Record<SortOrder, string> = {
-  newest: 'Newest',
-  oldest: 'Oldest',
-  titleAsc: 'A–Z',
-  titleDesc: 'Z–A',
-  updated: 'Edited',
-};
 
 /**
  * Search items. Two forms:

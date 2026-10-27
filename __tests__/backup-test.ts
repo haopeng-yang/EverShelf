@@ -36,9 +36,12 @@ describe('backup', () => {
   it('rejects damaged contents with a readable message', () => {
     const file = createBackup(sampleState(), new Map(), new Date());
     const orphan = { ...file, shelves: file.shelves.slice(1) };
-    expect(() => parseBackup(JSON.stringify(orphan))).toThrow('item 1 (its shelf is missing)');
+    expect(() => parseBackup(JSON.stringify(orphan))).toThrow('the shelf of item 1 is missing');
     const badTag = { ...file, items: [{ ...file.items[0], tags: [{ id: 1 }] }] };
     expect(() => parseBackup(JSON.stringify(badTag))).toThrow('a tag on item 1');
+    expect(() => parseBackup(JSON.stringify(badTag))).toThrow(
+      expect.objectContaining({ code: 'badTag', params: { n: 1 } }),
+    );
   });
 
   it('ignores covers that are not images', () => {
