@@ -1,8 +1,8 @@
 import type { BackupBook } from '../models/backup';
 import type { ShelfAction } from '../models/shelfReducer';
-import type { Bookmark, Chapter, Id, Item, ReadingProgress, Shelf, ShelfState } from '../models/types';
-import { chapterToRow, itemToRow, shelfToRow, tagToRow } from './rows';
-import { INSERT_BOOKMARK, SET_FINISHED, UPSERT_PROGRESS } from './schema';
+import type { BookInfo, Bookmark, Chapter, Id, Item, Page, ReadingProgress, Shelf, ShelfState } from '../models/types';
+import { chapterToRow, itemToRow, pageToRow, shelfToRow, tagToRow } from './rows';
+import { INSERT_BOOKMARK, INSERT_PAGE, SET_FINISHED, UPSERT_BOOK_INFO, UPSERT_PROGRESS } from './schema';
 
 export type SqlValue = string | number | null;
 
@@ -119,6 +119,25 @@ export function replaceChapters(itemId: Id, chapters: Chapter[]): Statement[] {
       };
     }),
   ];
+}
+
+/**
+ * Saves a whole comic: its kind and reading mode, its chapters (replacing any
+ * old ones, as replaceChapters does) and every chapter's pages.
+ */
+export function saveComicStatements(info: BookInfo, chapters: Chapter[], pages: Page[]): Statement[] {
+  return [
+    ...replaceChapters(info.itemId, chapters),
+    bookInfoStatement(info),
+    ...pages.map((page) => {
+      const row = pageToRow(page);
+      return { sql: INSERT_PAGE, params: [row.chapter_id, row.position, row.file_name, row.width, row.height] };
+    }),
+  ];
+}
+
+export function bookInfoStatement(info: BookInfo): Statement {
+  return { sql: UPSERT_BOOK_INFO, params: [info.itemId, info.kind, info.readingMode] };
 }
 
 /** Saves the reading position. Whether the book is finished is kept as it was. */

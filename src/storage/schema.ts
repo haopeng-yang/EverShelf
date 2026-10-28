@@ -2,7 +2,7 @@
 // run the same SQL against Node's built-in SQLite.
 
 /** Bump this and add a step in database.ts `migrate` whenever the tables change. */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export const CREATE_TABLES_V1 = `
 CREATE TABLE shelves (
@@ -105,11 +105,49 @@ export function shelfLockRepair(existingColumns: string[]): string[] {
     .map((column) => `ALTER TABLE shelves ADD COLUMN ${column} TEXT`);
 }
 
-/** One row per book (item with chapters), with its progress if it has been opened. */
+/**
+ * Version 8: comics. book_info says whether a book is text or a comic and how
+ * a comic is read; a book without a row is text, so existing books need no
+ * change. pages lists each comic chapter's images (stored as files) with
+ * their sizes. Both go away with their item or chapter. IF NOT EXISTS so a
+ * half-applied upgrade (see the version 7 note below) can safely run it again.
+ */
+export const MIGRATE_V8 = `
+CREATE TABLE IF NOT EXISTS book_info (
+  item_id TEXT PRIMARY KEY NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  reading_mode TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS pages (
+  chapter_id TEXT NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  file_name TEXT NOT NULL,
+  width INTEGER NOT NULL,
+  height INTEGER NOT NULL,
+  PRIMARY KEY (chapter_id, position)
+);
+`;
+
+/** One row per book (item with chapters), with its kind and its progress if it has been opened. */
 export const SELECT_BOOK_SUMMARIES = `
-SELECT c.item_id, COUNT(*) AS chapter_count, p.chapter_id, p.percent, p.updated_at, p.finished_at
-FROM chapters c LEFT JOIN reading_progress p ON p.item_id = c.item_id
+SELECT c.item_id, COUNT(*) AS chapter_count, COALESCE(b.kind, 'text') AS kind,
+  p.chapter_id, p.percent, p.updated_at, p.finished_at
+FROM chapters c
+LEFT JOIN reading_progress p ON p.item_id = c.item_id
+LEFT JOIN book_info b ON b.item_id = c.item_id
 GROUP BY c.item_id`;
+export const SELECT_BOOK_INFO = 'SELECT item_id, kind, reading_mode FROM book_info WHERE item_id = ?';
+export const UPSERT_BOOK_INFO = `INSERT INTO book_info (item_id, kind, reading_mode) VALUES (?, ?, ?)
+ON CONFLICT(item_id) DO UPDATE SET kind = excluded.kind, reading_mode = excluded.reading_mode`;
+export const SET_READING_MODE = 'UPDATE book_info SET reading_mode = ? WHERE item_id = ?';
+/** Every page of a comic, in reading order: chapter by chapter, then page by page. */
+export const SELECT_PAGES = `
+SELECT p.chapter_id, p.position, p.file_name, p.width, p.height
+FROM pages p JOIN chapters c ON c.id = p.chapter_id
+WHERE c.item_id = ?
+ORDER BY c.position, p.position`;
+export const INSERT_PAGE =
+  'INSERT INTO pages (chapter_id, position, file_name, width, height) VALUES (?, ?, ?, ?, ?)';
 export const SELECT_BOOKMARKS =
   'SELECT id, item_id, chapter_id, paragraph, excerpt, created_at FROM bookmarks WHERE item_id = ? ORDER BY created_at';
 export const INSERT_BOOKMARK =

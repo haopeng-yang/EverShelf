@@ -1,4 +1,18 @@
-import type { Bookmark, BookSummary, Chapter, Item, ReadingProgress, Shelf, ShelfState, Tag } from '../models/types';
+import {
+  DEFAULT_READING_MODE,
+  type BookInfo,
+  type BookKind,
+  type Bookmark,
+  type BookSummary,
+  type Chapter,
+  type Item,
+  type Page,
+  type ReadingMode,
+  type ReadingProgress,
+  type Shelf,
+  type ShelfState,
+  type Tag,
+} from '../models/types';
 
 // Plain rows as they come out of the tables in schema.ts.
 
@@ -56,9 +70,24 @@ export interface BookmarkRow {
   created_at: number;
 }
 
+export interface BookInfoRow {
+  item_id: string;
+  kind: string;
+  reading_mode: string;
+}
+
+export interface PageRow {
+  chapter_id: string;
+  position: number;
+  file_name: string;
+  width: number;
+  height: number;
+}
+
 export interface BookSummaryRow {
   item_id: string;
   chapter_count: number;
+  kind: string;
   chapter_id: string | null;
   percent: number | null;
   updated_at: number | null;
@@ -170,11 +199,47 @@ export function rowToBookSummary(row: BookSummaryRow): BookSummary {
   const finished = row.finished_at !== null;
   return {
     itemId: row.item_id,
+    kind: parseBookKind(row.kind),
     chapterCount: row.chapter_count,
     percent: finished ? 1 : (row.percent ?? 0),
     lastReadAt: row.updated_at,
     finished,
   };
+}
+
+export function rowToBookInfo(row: BookInfoRow): BookInfo {
+  return { itemId: row.item_id, kind: parseBookKind(row.kind), readingMode: parseReadingMode(row.reading_mode) };
+}
+
+export function pageToRow(page: Page): PageRow {
+  return {
+    chapter_id: page.chapterId,
+    position: page.position,
+    file_name: page.fileName,
+    width: page.width,
+    height: page.height,
+  };
+}
+
+export function rowToPage(row: PageRow): Page {
+  return {
+    chapterId: row.chapter_id,
+    position: row.position,
+    fileName: row.file_name,
+    width: row.width,
+    height: row.height,
+  };
+}
+
+// Values written by a newer version of the app fall back to the defaults.
+function parseBookKind(value: string): BookKind {
+  return value === 'comic' ? 'comic' : 'text';
+}
+
+const READING_MODES: ReadingMode[] = ['ltr', 'rtl', 'vertical'];
+
+function parseReadingMode(value: string): ReadingMode {
+  return READING_MODES.find((mode) => mode === value) ?? DEFAULT_READING_MODE;
 }
 
 function parseStringArray(json: string): string[] {

@@ -22,6 +22,24 @@ export function chapterFileName(position: number): string {
   return `${position}.txt`;
 }
 
+/** Folder for the comic chapter at a 0-based position; its pages go inside. */
+export function comicChapterFolder(position: number): string {
+  return String(position);
+}
+
+/** File name of a comic page, e.g. "2/14.jpg" for chapter 2, page 14. */
+export function pageFileName(chapterPosition: number, pagePosition: number, extension: string): string {
+  return `${comicChapterFolder(chapterPosition)}/${pagePosition}.${extension.toLowerCase()}`;
+}
+
+/** The page image's file URI, for showing it. Null if the name isn't a page file name. */
+export function pageUri(itemId: Id, fileName: string): string | null {
+  // Like ids, page names can come from backups, so never let one reach outside the book's folder.
+  const match = /^(\d+)\/(\d+\.[a-z0-9]+)$/.exec(fileName);
+  if (!match) return null;
+  return new File(bookDirectory(itemId), match[1], match[2]).uri;
+}
+
 /** Writes (or overwrites) one chapter's text. */
 export async function writeChapterText(itemId: Id, fileName: string, text: string): Promise<void> {
   const directory = bookDirectory(itemId);

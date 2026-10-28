@@ -3,17 +3,32 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { languageFromCode } from '../i18n';
 import { createDefaultState } from '../models/defaults';
-import type { Bookmark, BookSummary, Chapter, Id, ReadingProgress, ShelfState } from '../models/types';
+import {
+  DEFAULT_READING_MODE,
+  type BookInfo,
+  type Bookmark,
+  type BookSummary,
+  type Chapter,
+  type Id,
+  type Page,
+  type ReadingMode,
+  type ReadingProgress,
+  type ShelfState,
+} from '../models/types';
 import {
   rowsToState,
+  rowToBookInfo,
   rowToBookmark,
   rowToBookSummary,
   rowToChapter,
+  rowToPage,
   rowToProgress,
+  type BookInfoRow,
   type BookmarkRow,
   type BookSummaryRow,
   type ChapterRow,
   type ItemRow,
+  type PageRow,
   type ProgressRow,
   type ShelfRow,
   type TagRow,
@@ -26,12 +41,16 @@ import {
   MIGRATE_V4,
   MIGRATE_V5,
   MIGRATE_V6,
+  MIGRATE_V8,
   SCHEMA_VERSION,
+  SET_READING_MODE,
+  SELECT_BOOK_INFO,
   SELECT_BOOK_ITEM_IDS,
   SELECT_BOOK_SUMMARIES,
   SELECT_BOOKMARKS,
   SELECT_CHAPTERS,
   SELECT_ITEMS,
+  SELECT_PAGES,
   SELECT_PROGRESS,
   SELECT_SETTINGS,
   SELECT_SHELVES,
@@ -44,6 +63,7 @@ import {
   insertBookmarkStatement,
   insertState,
   replaceChapters,
+  saveComicStatements,
   saveProgressStatement,
   type Statement,
 } from './statements';
@@ -80,7 +100,10 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
       const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(shelves)');
       for (const sql of shelfLockRepair(columns.map((c) => c.name))) await db.execAsync(sql);
     }
-    // Future upgrades go here: if (version < 8) { ... }
+    if (version < 8) {
+      await db.execAsync(MIGRATE_V8);
+    }
+    // Future upgrades go here: if (version < 9) { ... }
 
     // Seed the starting shelves only on a fresh install, so shelves the user
     // deletes later don't come back. They're named in the phone's language.
@@ -126,6 +149,27 @@ export async function saveChapters(db: SQLiteDatabase, itemId: Id, chapters: Cha
 export async function loadBookItemIds(db: SQLiteDatabase): Promise<Set<Id>> {
   const rows = await db.getAllAsync<{ item_id: string }>(SELECT_BOOK_ITEM_IDS);
   return new Set(rows.map((r) => r.item_id));
+}
+
+/** Whether a book is text or a comic, and how a comic is read. Books with nothing stored are text. */
+export async function loadBookInfo(db: SQLiteDatabase, itemId: Id): Promise<BookInfo> {
+  const row = await db.getFirstAsync<BookInfoRow>(SELECT_BOOK_INFO, [itemId]);
+  return row ? rowToBookInfo(row) : { itemId, kind: 'text', readingMode: DEFAULT_READING_MODE };
+}
+
+/** Saves a whole comic: kind and reading mode, chapters and pages, replacing what was there. */
+export async function saveComic(db: SQLiteDatabase, info: BookInfo, chapters: Chapter[], pages: Page[]): Promise<void> {
+  await runStatements(db, saveComicStatements(info, chapters, pages));
+}
+
+export async function setReadingMode(db: SQLiteDatabase, itemId: Id, readingMode: ReadingMode): Promise<void> {
+  await db.runAsync(SET_READING_MODE, [readingMode, itemId]);
+}
+
+/** Every page of a comic in reading order. Empty for a novel. */
+export async function loadPages(db: SQLiteDatabase, itemId: Id): Promise<Page[]> {
+  const rows = await db.getAllAsync<PageRow>(SELECT_PAGES, [itemId]);
+  return rows.map(rowToPage);
 }
 
 export async function loadProgress(db: SQLiteDatabase, itemId: Id): Promise<ReadingProgress | null> {

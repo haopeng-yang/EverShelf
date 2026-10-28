@@ -6,17 +6,21 @@ import { DatabaseSync } from 'node:sqlite';
 import { addItem, addShelf, addTag } from '../src/models/actions';
 import { createDefaultState } from '../src/models/defaults';
 import { shelfReducer, type ShelfAction } from '../src/models/shelfReducer';
-import type { Chapter, Id, ShelfState } from '../src/models/types';
+import type { BookInfo, Chapter, Id, Page, ShelfState } from '../src/models/types';
 import {
   rowsToState,
+  rowToBookInfo,
   rowToBookmark,
   rowToBookSummary,
   rowToChapter,
+  rowToPage,
   rowToProgress,
+  type BookInfoRow,
   type BookmarkRow,
   type BookSummaryRow,
   type ChapterRow,
   type ItemRow,
+  type PageRow,
   type ProgressRow,
   type ShelfRow,
   type TagRow,
@@ -28,11 +32,14 @@ import {
   MIGRATE_V4,
   MIGRATE_V5,
   MIGRATE_V6,
+  MIGRATE_V8,
+  SELECT_BOOK_INFO,
   SELECT_BOOK_ITEM_IDS,
   SELECT_BOOK_SUMMARIES,
   SELECT_BOOKMARKS,
   SELECT_CHAPTERS,
   SELECT_ITEMS,
+  SELECT_PAGES,
   SELECT_PROGRESS,
   SELECT_SETTINGS,
   SELECT_SHELVES,
@@ -46,6 +53,7 @@ import {
   insertState,
   replaceChapters,
   restoreBookStatements,
+  saveComicStatements,
   saveProgressStatement,
   statementsForAction,
   type Statement,
@@ -67,6 +75,7 @@ function migrateAll(db: DatabaseSync) {
   db.exec(MIGRATE_V4);
   db.exec(MIGRATE_V5);
   db.exec(MIGRATE_V6);
+  db.exec(MIGRATE_V8);
 }
 
 function chapters(itemId: Id, titles: string[]): Chapter[] {
@@ -251,10 +260,10 @@ describe('Book storage', () => {
         .map((r) => rowToBookSummary({ ...r } as unknown as BookSummaryRow));
 
     // Opened never: no progress yet.
-    expect(summaries()).toEqual([{ itemId, chapterCount: 3, percent: 0, lastReadAt: null, finished: false }]);
+    expect(summaries()).toEqual([{ itemId, kind: 'text', chapterCount: 3, percent: 0, lastReadAt: null, finished: false }]);
 
     run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch1`, paragraph: 3, percent: 0.4, updatedAt: 7 })]);
-    expect(summaries()[0]).toEqual({ itemId, chapterCount: 3, percent: 0.4, lastReadAt: 7, finished: false });
+    expect(summaries()[0]).toEqual({ itemId, kind: 'text', chapterCount: 3, percent: 0.4, lastReadAt: 7, finished: false });
 
     // Finishing keeps the position; saving a new position keeps "finished".
     run(db, finishedStatements(itemId, true, `${itemId}-ch2`, 9));
@@ -324,6 +333,116 @@ describe('Book storage', () => {
       finishedAt: 8,
     });
     expect(db.prepare(SELECT_BOOKMARKS).all(itemId)).toHaveLength(1);
+  });
+});
+
+describe('Comic storage', () => {
+  /** A database with one item, "Akira", on the Manga shelf. */
+  function withItem() {
+    const db = openTestDb();
+    const manga = createDefaultState().shelves.find((s) => s.id === 'manga')!;
+    const state = dispatch(db, createDefaultState(), addItem(manga, 'Akira'));
+    return { db, state, itemId: state.items[0].id };
+  }
+
+  /** Two chapters with 3 and 2 pages; charCount is the page count. */
+  function comic(itemId: Id) {
+    const chapterList: Chapter[] = [0, 1].map((position) => ({
+      id: `${itemId}-ch${position}`,
+      itemId,
+      position,
+      title: `Chapter ${position + 1}`,
+      fileName: String(position),
+      charCount: position === 0 ? 3 : 2,
+    }));
+    const pages: Page[] = chapterList.flatMap((chapter) =>
+      Array.from({ length: chapter.charCount }, (_, position) => ({
+        chapterId: chapter.id,
+        position,
+        fileName: `${chapter.position}/${position}.jpg`,
+        width: 800,
+        height: 1200 + position,
+      })),
+    );
+    const info: BookInfo = { itemId, kind: 'comic', readingMode: 'rtl' };
+    return { info, chapters: chapterList, pages };
+  }
+
+  const loadPages = (db: DatabaseSync, itemId: Id) =>
+    db
+      .prepare(SELECT_PAGES)
+      .all(itemId)
+      .map((r) => rowToPage({ ...r } as unknown as PageRow));
+  const loadInfo = (db: DatabaseSync, itemId: Id) => {
+    const row = db.prepare(SELECT_BOOK_INFO).get(itemId);
+    return row ? rowToBookInfo({ ...row } as unknown as BookInfoRow) : null;
+  };
+
+  it('saves a comic and loads its pages back in reading order', () => {
+    const { db, itemId } = withItem();
+    const saved = comic(itemId);
+    // Saved out of order; loading sorts by chapter, then page.
+    run(db, saveComicStatements(saved.info, saved.chapters, [...saved.pages].reverse()));
+    expect(loadInfo(db, itemId)).toEqual(saved.info);
+    expect(loadChapters(db, itemId)).toEqual(saved.chapters);
+    expect(loadPages(db, itemId)).toEqual(saved.pages);
+    expect(
+      db
+        .prepare(SELECT_BOOK_SUMMARIES)
+        .all()
+        .map((r) => rowToBookSummary({ ...r } as unknown as BookSummaryRow)),
+    ).toEqual([{ itemId, kind: 'comic', chapterCount: 2, percent: 0, lastReadAt: null, finished: false }]);
+  });
+
+  it('saving again replaces the old chapters and pages', () => {
+    const { db, itemId } = withItem();
+    const first = comic(itemId);
+    run(db, saveComicStatements(first.info, first.chapters, first.pages));
+    const second = comic(itemId);
+    const onlyChapter = { ...second.chapters[1], id: 'new', position: 0 };
+    const pages = second.pages.filter((p) => p.chapterId === second.chapters[1].id).map((p) => ({ ...p, chapterId: 'new' }));
+    run(db, saveComicStatements({ ...second.info, readingMode: 'vertical' }, [onlyChapter], pages));
+    expect(loadInfo(db, itemId)?.readingMode).toBe('vertical');
+    expect(loadPages(db, itemId)).toEqual(pages);
+  });
+
+  it('deleting the item removes its kind, chapters and pages', () => {
+    const { db, state, itemId } = withItem();
+    const saved = comic(itemId);
+    run(db, saveComicStatements(saved.info, saved.chapters, saved.pages));
+    dispatch(db, state, { type: 'item/remove', itemId });
+    expect(loadInfo(db, itemId)).toBeNull();
+    expect(db.prepare('SELECT COUNT(*) AS n FROM pages').get()).toEqual(expect.objectContaining({ n: 0 }));
+  });
+
+  it('unknown stored values fall back to text and left to right', () => {
+    expect(rowToBookInfo({ item_id: 'x', kind: 'hologram', reading_mode: 'diagonal' })).toEqual({
+      itemId: 'x',
+      kind: 'text',
+      readingMode: 'ltr',
+    });
+  });
+
+  it('upgrading a version 7 database keeps its novels as text books, and can run twice', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec('PRAGMA foreign_keys = ON;');
+    for (const sql of [CREATE_TABLES_V1, CREATE_TABLES_V2, CREATE_TABLES_V3, MIGRATE_V4, MIGRATE_V5, MIGRATE_V6]) db.exec(sql);
+    run(db, insertState(createDefaultState()));
+    const state = dispatch(db, createDefaultState(), addItem(createDefaultState().shelves[0], 'Dune'));
+    const itemId = state.items[0].id;
+    run(db, replaceChapters(itemId, chapters(itemId, ['One', 'Two'])));
+    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch1`, paragraph: 4, percent: 0.6, updatedAt: 3 })]);
+
+    db.exec(MIGRATE_V8);
+    db.exec(MIGRATE_V8);
+    expect(load(db)).toEqual(state);
+    expect(loadChapters(db, itemId)).toHaveLength(2);
+    expect(
+      db
+        .prepare(SELECT_BOOK_SUMMARIES)
+        .all()
+        .map((r) => rowToBookSummary({ ...r } as unknown as BookSummaryRow)),
+    ).toEqual([{ itemId, kind: 'text', chapterCount: 2, percent: 0.6, lastReadAt: 3, finished: false }]);
   });
 });
 
