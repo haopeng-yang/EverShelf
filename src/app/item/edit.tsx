@@ -7,6 +7,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Button } from '@/components/Button';
 import { Cover } from '@/components/Cover';
 import { confirm, showMessage } from '@/components/dialogs';
+import { LockedScreen } from '@/components/LockedShelf';
 import { NotFound } from '@/components/NotFound';
 import { TextField } from '@/components/TextField';
 import { useT } from '@/i18n/useT';
@@ -14,6 +15,7 @@ import { newItemDraft } from '@/models/actions';
 import { newId } from '@/models/ids';
 import { moveInArray } from '@/models/shelfReducer';
 import type { Id, Item, Tag } from '@/models/types';
+import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
 import { deleteBookFiles } from '@/storage/bookFiles';
 import { deleteCover, saveCover } from '@/storage/covers';
@@ -36,8 +38,10 @@ export default function EditItemScreen() {
   });
   const [saving, setSaving] = useState(false);
   const styles = useStyles();
+  const { isLocked } = useShelfLocks();
 
   if (!draft || !shelf) return <NotFound what="item" />;
+  if (isLocked(shelf)) return <LockedScreen shelf={shelf} />;
 
   const update = (changes: Partial<Item>) => setDraft((d) => d && { ...d, ...changes });
   const updateTag = (tagId: Id, changes: Partial<Tag>) =>

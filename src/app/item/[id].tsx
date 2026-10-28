@@ -6,8 +6,10 @@ import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { percentLabel } from '@/books/progress';
 import { Button } from '@/components/Button';
 import { Cover } from '@/components/Cover';
+import { LockedScreen } from '@/components/LockedShelf';
 import { NotFound } from '@/components/NotFound';
 import { useT } from '@/i18n/useT';
+import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfState } from '@/state/ShelfProvider';
 import { loadChapters, loadProgress } from '@/storage/database';
 import { fontSize, makeStyles, spacing } from '@/theme';
@@ -49,8 +51,11 @@ export default function ItemScreen() {
       };
     }, [db, id, t]),
   );
+  const { isLocked } = useShelfLocks();
   const item = state.items.find((i) => i.id === id);
   if (!item) return <NotFound what="item" />;
+  const itemShelf = state.shelves.find((s) => s.id === item.shelfId);
+  if (itemShelf && isLocked(itemShelf)) return <LockedScreen shelf={itemShelf} />;
 
   const shelf = state.shelves.find((s) => s.id === item.shelfId);
   const sideBySide = width >= SIDE_BY_SIDE_MIN_WIDTH;

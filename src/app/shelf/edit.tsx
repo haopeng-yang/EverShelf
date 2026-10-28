@@ -1,19 +1,21 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Switch, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { Button } from '@/components/Button';
 import { confirm, showMessage } from '@/components/dialogs';
+import { LockedShelf } from '@/components/LockedShelf';
 import { NotFound } from '@/components/NotFound';
 import { TextField } from '@/components/TextField';
 import { useT } from '@/i18n/useT';
 import { addShelf } from '@/models/actions';
 import { newId } from '@/models/ids';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
+import { MIN_PASSWORD_LENGTH, createLock } from '@/security/shelfLock';
+import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
-import { deleteBookFiles } from '@/storage/bookFiles';
-import { deleteCover } from '@/storage/covers';
+import { deleteItemFiles } from '@/storage/shelfFiles';
 import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
 /** Starting tags are edited as rows with ids so React keeps inputs stable while typing. */
@@ -35,26 +37,65 @@ export default function EditShelfScreen() {
   const [tagNames, setTagNames] = useState<TagNameRow[]>(() =>
     (shelf?.defaultTagNames ?? [t('tag.date'), t('tag.description')]).map((n) => ({ key: newId(), name: n })),
   );
+  const [lockEnabled, setLockEnabled] = useState(!!shelf?.lock);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const { isLocked, unlock } = useShelfLocks();
   const styles = useStyles();
 
   if (id && !shelf) return <NotFound what="shelf" />;
+  // Anyone could remove the lock here, so this screen needs the password too.
+  if (shelf && isLocked(shelf)) {
+    return (
+      <>
+        <Stack.Screen options={{ title: t('shelfEdit.editTitle') }} />
+        <LockedShelf shelf={shelf} onDeleted={() => router.back()} />
+      </>
+    );
+  }
 
   const itemCount = shelf ? selectItemsOnShelf(state, shelf.id).length : 0;
+  // A shelf that already has a password keeps it unless a new one is typed.
+  const keepsPassword = !!shelf?.lock && password === '' && confirmPassword === '';
 
-  function save() {
+  async function save() {
     const trimmed = name.trim();
     if (!trimmed) {
       showMessage(t('shelfEdit.needName'));
       return;
     }
-    const defaults = tagNames.map((row) => row.name.trim()).filter(Boolean);
-    if (shelf) {
-      dispatch({ type: 'shelf/rename', shelfId: shelf.id, name: trimmed });
-      dispatch({ type: 'shelf/setDefaultTags', shelfId: shelf.id, defaultTagNames: defaults });
-    } else {
-      dispatch(addShelf(trimmed, defaults));
+    if (lockEnabled && !keepsPassword) {
+      if (password.length < MIN_PASSWORD_LENGTH) {
+        showMessage(t('shelfEdit.passwordTooShort', { min: MIN_PASSWORD_LENGTH }));
+        return;
+      }
+      if (password !== confirmPassword) {
+        showMessage(t('shelfEdit.passwordMismatch'));
+        return;
+      }
     }
-    router.back();
+    setSaving(true);
+    try {
+      const newLock = lockEnabled && !keepsPassword ? await createLock(password) : undefined;
+      const defaults = tagNames.map((row) => row.name.trim()).filter(Boolean);
+      if (shelf) {
+        dispatch({ type: 'shelf/rename', shelfId: shelf.id, name: trimmed });
+        dispatch({ type: 'shelf/setDefaultTags', shelfId: shelf.id, defaultTagNames: defaults });
+        if (newLock) dispatch({ type: 'shelf/setLock', shelfId: shelf.id, lock: newLock });
+        else if (!lockEnabled && shelf.lock) dispatch({ type: 'shelf/setLock', shelfId: shelf.id, lock: null });
+        unlock(shelf.id);
+      } else {
+        const action = addShelf(trimmed, defaults, newLock);
+        dispatch(action);
+        // You just chose the password, so the new shelf starts unlocked until the app closes.
+        unlock(action.shelf.id);
+      }
+      router.back();
+    } catch (error) {
+      setSaving(false);
+      showMessage(t('shelfEdit.saveFailed', { error: String(error) }));
+    }
   }
 
   async function remove() {
@@ -70,10 +111,7 @@ export default function EditShelfScreen() {
     );
     if (!ok) return;
     dispatch({ type: 'shelf/remove', shelfId: shelf.id });
-    items.forEach((item) => {
-      deleteCover(item.coverUri);
-      deleteBookFiles(item.id);
-    });
+    deleteItemFiles(items);
     router.back();
   }
 
@@ -82,7 +120,9 @@ export default function EditShelfScreen() {
       <Stack.Screen
         options={{
           title: shelf ? t('shelfEdit.editTitle') : t('shelfEdit.newTitle'),
-          headerRight: () => <Button title={t('common.save')} variant="text" compact onPress={save} />,
+          headerRight: () => (
+            <Button title={t('common.save')} variant="text" compact disabled={saving} onPress={save} />
+          ),
         }}
       />
 
@@ -124,6 +164,38 @@ export default function EditShelfScreen() {
         />
       </View>
 
+      <View style={styles.section}>
+        <Text style={styles.label}>{t('shelfEdit.lock')}</Text>
+        <View style={styles.switchRow}>
+          <Text style={styles.switchLabel}>{t('shelfEdit.lockSwitch')}</Text>
+          <Switch value={lockEnabled} onValueChange={setLockEnabled} />
+        </View>
+        {lockEnabled && (
+          <>
+            {shelf?.lock && <Text style={styles.hint}>{t('shelfEdit.changePasswordHint')}</Text>}
+            <TextField
+              value={password}
+              onChangeText={setPassword}
+              placeholder={shelf?.lock ? t('shelfEdit.newPassword') : t('lock.password')}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              accessibilityLabel={t('lock.password')}
+            />
+            <TextField
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder={t('shelfEdit.confirmPassword')}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              accessibilityLabel={t('shelfEdit.confirmPassword')}
+            />
+          </>
+        )}
+        <Text style={styles.hint}>{t('shelfEdit.lockHint')}</Text>
+      </View>
+
       {shelf && (
         <>
           <View style={styles.section}>
@@ -161,6 +233,8 @@ const useStyles = makeStyles((c) => ({
   hint: { fontSize: fontSize.small, color: c.textMuted },
   tagRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   tagInput: { flex: 1 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  switchLabel: { flex: 1, fontSize: fontSize.body, color: c.text },
   moveRow: { flexDirection: 'row', gap: spacing.sm },
   moveButton: { flex: 1 },
   dangerZone: {

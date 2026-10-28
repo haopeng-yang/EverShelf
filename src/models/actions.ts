@@ -1,14 +1,18 @@
 import { newId } from './ids';
 import type { ShelfAction } from './shelfReducer';
-import type { Id, Item, Shelf } from './types';
+import type { Id, Item, Shelf, ShelfLock } from './types';
 
 /**
  * Helpers that build actions with fresh ids and timestamps, so screens can
  * write e.g. dispatch(addTag(item.id, 'Age Restricted', 'Recommended 15+')).
  */
 
-export function addShelf(name: string, defaultTagNames: string[] = ['Date', 'Description']): ShelfAction {
-  const shelf: Shelf = { id: newId(), name: name.trim(), defaultTagNames };
+export function addShelf(
+  name: string,
+  defaultTagNames: string[] = ['Date', 'Description'],
+  lock?: ShelfLock,
+): ShelfAction & { type: 'shelf/add' } {
+  const shelf: Shelf = { id: newId(), name: name.trim(), defaultTagNames, ...(lock ? { lock } : {}) };
   return { type: 'shelf/add', shelf };
 }
 

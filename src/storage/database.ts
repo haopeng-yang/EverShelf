@@ -25,6 +25,7 @@ import {
   DELETE_BOOKMARK,
   MIGRATE_V4,
   MIGRATE_V5,
+  MIGRATE_V6,
   SCHEMA_VERSION,
   SELECT_BOOK_ITEM_IDS,
   SELECT_BOOK_SUMMARIES,
@@ -35,6 +36,7 @@ import {
   SELECT_SETTINGS,
   SELECT_SHELVES,
   SELECT_TAGS,
+  shelfLockRepair,
   UPSERT_SETTING,
 } from './schema';
 import {
@@ -58,10 +60,6 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
   await db.withTransactionAsync(async () => {
     if (version < 1) {
       await db.execAsync(CREATE_TABLES_V1);
-      // Seed the starting shelves only on a fresh install, so shelves the
-      // user deletes later don't come back. They're named in the phone's language.
-      const language = languageFromCode(getLocales()[0]?.languageCode);
-      for (const s of insertState(createDefaultState(language))) await db.runAsync(s.sql, s.params);
     }
     if (version < 2) {
       await db.execAsync(CREATE_TABLES_V2);
@@ -75,7 +73,22 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
     if (version < 5) {
       await db.execAsync(MIGRATE_V5);
     }
-    // Future upgrades go here: if (version < 6) { ... }
+    if (version < 6) {
+      await db.execAsync(MIGRATE_V6);
+    }
+    if (version < 7) {
+      const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(shelves)');
+      for (const sql of shelfLockRepair(columns.map((c) => c.name))) await db.execAsync(sql);
+    }
+    // Future upgrades go here: if (version < 8) { ... }
+
+    // Seed the starting shelves only on a fresh install, so shelves the user
+    // deletes later don't come back. They're named in the phone's language.
+    // This runs after every upgrade, because the inserts use the newest columns.
+    if (version < 1) {
+      const language = languageFromCode(getLocales()[0]?.languageCode);
+      for (const s of insertState(createDefaultState(language))) await db.runAsync(s.sql, s.params);
+    }
   });
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }

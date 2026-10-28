@@ -7,6 +7,9 @@ export interface ShelfRow {
   name: string;
   position: number;
   default_tag_names: string;
+  /** Both set for a locked shelf, both null otherwise. */
+  lock_salt: string | null;
+  lock_hash: string | null;
 }
 
 export interface ItemRow {
@@ -75,6 +78,7 @@ export function rowsToState(shelfRows: ShelfRow[], itemRows: ItemRow[], tagRows:
     id: row.id,
     name: row.name,
     defaultTagNames: parseStringArray(row.default_tag_names),
+    ...(row.lock_salt && row.lock_hash ? { lock: { salt: row.lock_salt, hash: row.lock_hash } } : {}),
   }));
 
   const items: Item[] = itemRows.map((row) => ({
@@ -93,7 +97,14 @@ export function rowsToState(shelfRows: ShelfRow[], itemRows: ItemRow[], tagRows:
 }
 
 export function shelfToRow(shelf: Shelf, position: number): ShelfRow {
-  return { id: shelf.id, name: shelf.name, position, default_tag_names: JSON.stringify(shelf.defaultTagNames) };
+  return {
+    id: shelf.id,
+    name: shelf.name,
+    position,
+    default_tag_names: JSON.stringify(shelf.defaultTagNames),
+    lock_salt: shelf.lock?.salt ?? null,
+    lock_hash: shelf.lock?.hash ?? null,
+  };
 }
 
 export function itemToRow(item: Item): ItemRow {

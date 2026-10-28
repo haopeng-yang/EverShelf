@@ -8,6 +8,7 @@ import { Button } from '@/components/Button';
 import { ContinueReadingRow } from '@/components/ContinueReadingRow';
 import { ItemCard } from '@/components/ItemCard';
 import { ItemRow } from '@/components/ItemRow';
+import { LockedShelf } from '@/components/LockedShelf';
 import { OptionSheet } from '@/components/OptionSheet';
 import { ShelfTabs } from '@/components/ShelfTabs';
 import { TextField } from '@/components/TextField';
@@ -16,6 +17,7 @@ import { SORT_ORDERS, filterItems, sortItems } from '@/models/query';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
 import type { BookSummary, Id } from '@/models/types';
 import { useSettings } from '@/state/SettingsProvider';
+import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfState } from '@/state/ShelfProvider';
 import { loadBookSummaries } from '@/storage/database';
 import { fontSize, makeStyles, spacing } from '@/theme';
@@ -44,6 +46,7 @@ export default function ShelvesScreen() {
 
   // Falls back to the first shelf if the selected one was deleted.
   const shelf = state.shelves.find((s) => s.id === selectedId) ?? state.shelves[0];
+  const { isLocked, lock } = useShelfLocks();
   // Reading progress of imported books, reloaded whenever the shelf comes back into view.
   const db = useSQLiteContext();
   const [books, setBooks] = useState<Map<Id, BookSummary>>(new Map());
@@ -113,6 +116,8 @@ export default function ShelvesScreen() {
           <Text style={styles.emptyText}>{t('home.noShelves')}</Text>
           <Button title={t('home.addShelf')} variant="primary" onPress={() => router.push('/shelf/edit')} />
         </View>
+      ) : isLocked(shelf) ? (
+        <LockedShelf shelf={shelf} />
       ) : (
         <>
           <View style={styles.toolbar}>
@@ -141,6 +146,18 @@ export default function ShelvesScreen() {
               onPress={() => setSetting('viewMode', listView ? 'grid' : 'list')}
               style={styles.toolbarButton}
             />
+            {shelf.lock && (
+              <Button
+                title="🔒"
+                compact
+                accessibilityLabel={t('home.lockNow', { shelf: shelf.name })}
+                onPress={() => {
+                  setQuery('');
+                  lock(shelf.id);
+                }}
+                style={styles.toolbarButton}
+              />
+            )}
           </View>
           {searching && (
             <View style={styles.resultsRow}>

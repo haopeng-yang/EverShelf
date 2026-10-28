@@ -245,6 +245,31 @@ export const en = {
   'readerSettings.keepAwake': 'Keep screen on while reading',
   'reader.missingText': 'This chapter’s text is missing. Try importing the book again.',
 
+  // Shelf password lock
+  'home.lockNow': 'Lock {shelf} now',
+  'lock.title': '{name} is locked',
+  'lock.enterPassword': 'Enter the shelf’s password to open it.',
+  'lock.password': 'Password',
+  'lock.unlock': 'Unlock',
+  'lock.wrongPassword': 'Wrong password. Try again.',
+  'lock.forgot': 'Forgot password?',
+  'lock.forgotTitle': 'Delete this shelf?',
+  'lock.forgotMessage':
+    'A forgotten password can’t be recovered. The only way out is to delete “{name}” and its {count} items. This cannot be undone.',
+  'lock.forgotMessage_one':
+    'A forgotten password can’t be recovered. The only way out is to delete “{name}” and its 1 item. This cannot be undone.',
+  'lock.deleteShelf': 'Delete shelf',
+  'shelfEdit.lock': 'Password lock',
+  'shelfEdit.lockSwitch': 'Lock this shelf with a password',
+  'shelfEdit.lockHint':
+    'A locked shelf asks for its password each time the app is opened. This keeps it private from others using your phone, but doesn’t encrypt it: backups still include it. A forgotten password can’t be recovered.',
+  'shelfEdit.changePasswordHint': 'Leave these empty to keep the current password.',
+  'shelfEdit.newPassword': 'New password',
+  'shelfEdit.confirmPassword': 'Confirm password',
+  'shelfEdit.passwordTooShort': 'The password needs at least {min} characters.',
+  'shelfEdit.passwordMismatch': 'The two passwords don’t match.',
+  'shelfEdit.saveFailed': 'Could not save the shelf: {error}',
+
   'backupError.notBackup': 'This file is not an EverShelf backup.',
   'backupError.newerVersion': 'This backup was made by a newer version of EverShelf. Please update the app first.',
   'backupError.missingLists': 'This backup is damaged: shelves or items are missing.',

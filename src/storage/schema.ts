@@ -2,7 +2,7 @@
 // run the same SQL against Node's built-in SQLite.
 
 /** Bump this and add a step in database.ts `migrate` whenever the tables change. */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 7;
 
 export const CREATE_TABLES_V1 = `
 CREATE TABLE shelves (
@@ -87,6 +87,24 @@ CREATE TABLE bookmarks (
 CREATE INDEX bookmarks_item_id ON bookmarks(item_id);
 `;
 
+/** Version 6: an optional password per shelf, kept as a salted hash. */
+export const MIGRATE_V6 = `
+ALTER TABLE shelves ADD COLUMN lock_salt TEXT;
+ALTER TABLE shelves ADD COLUMN lock_hash TEXT;
+`;
+
+/**
+ * Version 7 repairs databases marked version 6 without the lock columns (this
+ * happened while developing with live reload: the version number changed
+ * before the step that adds the columns existed). Given the shelves table's
+ * column names, returns the statements that add whichever are missing.
+ */
+export function shelfLockRepair(existingColumns: string[]): string[] {
+  return ['lock_salt', 'lock_hash']
+    .filter((column) => !existingColumns.includes(column))
+    .map((column) => `ALTER TABLE shelves ADD COLUMN ${column} TEXT`);
+}
+
 /** One row per book (item with chapters), with its progress if it has been opened. */
 export const SELECT_BOOK_SUMMARIES = `
 SELECT c.item_id, COUNT(*) AS chapter_count, p.chapter_id, p.percent, p.updated_at, p.finished_at
@@ -112,7 +130,8 @@ export const SELECT_SETTINGS = 'SELECT key, value FROM settings';
 export const UPSERT_SETTING =
   'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value';
 
-export const SELECT_SHELVES = 'SELECT id, name, position, default_tag_names FROM shelves ORDER BY position, rowid';
+export const SELECT_SHELVES =
+  'SELECT id, name, position, default_tag_names, lock_salt, lock_hash FROM shelves ORDER BY position, rowid';
 export const SELECT_ITEMS =
   'SELECT id, shelf_id, title, cover_uri, created_at, updated_at FROM items ORDER BY created_at, rowid';
 export const SELECT_TAGS = 'SELECT id, item_id, name, value, position FROM tags ORDER BY item_id, position';

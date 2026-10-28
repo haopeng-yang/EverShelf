@@ -26,7 +26,8 @@ export function statementsForAction(action: ShelfAction, next: ShelfState): Stat
     }
 
     case 'shelf/rename':
-    case 'shelf/setDefaultTags': {
+    case 'shelf/setDefaultTags':
+    case 'shelf/setLock': {
       const index = next.shelves.findIndex((s) => s.id === action.shelfId);
       return index === -1 ? [] : [updateShelf(next.shelves[index], index)];
     }
@@ -135,16 +136,16 @@ export function insertBookmarkStatement(bookmark: Bookmark): Statement {
 function insertShelf(shelf: Shelf, position: number): Statement {
   const row = shelfToRow(shelf, position);
   return {
-    sql: 'INSERT INTO shelves (id, name, position, default_tag_names) VALUES (?, ?, ?, ?)',
-    params: [row.id, row.name, row.position, row.default_tag_names],
+    sql: 'INSERT INTO shelves (id, name, position, default_tag_names, lock_salt, lock_hash) VALUES (?, ?, ?, ?, ?, ?)',
+    params: [row.id, row.name, row.position, row.default_tag_names, row.lock_salt, row.lock_hash],
   };
 }
 
 function updateShelf(shelf: Shelf, position: number): Statement {
   const row = shelfToRow(shelf, position);
   return {
-    sql: 'UPDATE shelves SET name = ?, position = ?, default_tag_names = ? WHERE id = ?',
-    params: [row.name, row.position, row.default_tag_names, row.id],
+    sql: 'UPDATE shelves SET name = ?, position = ?, default_tag_names = ?, lock_salt = ?, lock_hash = ? WHERE id = ?',
+    params: [row.name, row.position, row.default_tag_names, row.lock_salt, row.lock_hash, row.id],
   };
 }
 

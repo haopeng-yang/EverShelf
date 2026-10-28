@@ -26,6 +26,20 @@ export interface Shelf {
   name: string;
   /** Tag names every new item on this shelf starts with (values left empty). */
   defaultTagNames: string[];
+  /** Set when the shelf needs a password to open. Missing for unlocked shelves. */
+  lock?: ShelfLock;
+}
+
+/**
+ * A shelf's password, stored only as a salted hash so the password itself is
+ * never saved. This hides a shelf from other people using the phone; it does
+ * not encrypt the shelf's data.
+ */
+export interface ShelfLock {
+  /** Random salt, as hex. */
+  salt: string;
+  /** SHA-256 of salt + password, as hex. */
+  hash: string;
 }
 
 /**

@@ -10,6 +10,7 @@ import { bookPercent } from '@/books/progress';
 import { BookSearchSheet } from '@/components/BookSearchSheet';
 import { Button } from '@/components/Button';
 import { ChapterListSheet } from '@/components/ChapterListSheet';
+import { LockedScreen } from '@/components/LockedShelf';
 import { NotFound } from '@/components/NotFound';
 import { ReaderSettingsSheet } from '@/components/ReaderSettingsSheet';
 import { useT } from '@/i18n/useT';
@@ -17,6 +18,7 @@ import { readerStyle } from '@/models/readerSettings';
 import { newId } from '@/models/ids';
 import type { Bookmark, Chapter } from '@/models/types';
 import { useSettings } from '@/state/SettingsProvider';
+import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfState } from '@/state/ShelfProvider';
 import { readChapterText } from '@/storage/bookFiles';
 import {
@@ -54,6 +56,7 @@ export default function ReaderScreen() {
   const styles = useStyles();
   const insets = useSafeAreaInsets();
   const item = state.items.find((i) => i.id === itemId);
+  const { isLocked } = useShelfLocks();
 
   const [chapters, setChapters] = useState<Chapter[] | null>(null);
   const [index, setIndex] = useState(0);
@@ -185,6 +188,8 @@ export default function ReaderScreen() {
   }, [layoutKey]);
 
   if (!item) return <NotFound what="item" />;
+  const itemShelf = state.shelves.find((s) => s.id === item.shelfId);
+  if (itemShelf && isLocked(itemShelf)) return <LockedScreen shelf={itemShelf} />;
 
   /** Opens a chapter, at its start or at a given paragraph (from a bookmark or search result). */
   const goTo = (next: number, paragraph = 0) => {

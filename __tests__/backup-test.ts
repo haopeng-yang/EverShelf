@@ -112,3 +112,18 @@ describe('backup with books', () => {
     expect(parsed.books[0].bookmarks.map((b) => b.id)).toEqual(['b1']);
   });
 });
+
+describe('backup with locked shelves', () => {
+  it('keeps a shelf lock, and refuses a damaged one', () => {
+    const state = sampleState();
+    const locked = {
+      ...state,
+      shelves: state.shelves.map((s, i) => (i === 0 ? { ...s, lock: { salt: '0a1b', hash: 'ff00' } } : s)),
+    };
+    const file = createBackup(locked, new Map(), new Date());
+    expect(parseBackup(JSON.stringify(file)).state.shelves).toEqual(locked.shelves);
+
+    const damaged = { ...file, shelves: [{ ...file.shelves[0], lock: { salt: 'x', hash: 1 } }, ...file.shelves.slice(1)] };
+    expect(() => parseBackup(JSON.stringify(damaged))).toThrow(BackupError);
+  });
+});

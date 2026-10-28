@@ -186,10 +186,17 @@ function parseShelf(raw: unknown, n: number): Shelf {
     throw new BackupError('badShelf', { n });
   }
   const defaults = Array.isArray(raw.defaultTagNames) ? raw.defaultTagNames : [];
+  // A locked shelf stays locked after a restore. A lock that isn't readable is
+  // refused rather than dropped, which would quietly unlock the shelf.
+  const lock = raw.lock;
+  if (lock !== undefined && !(isObject(lock) && isHex(lock.salt) && isHex(lock.hash))) {
+    throw new BackupError('badShelf', { n });
+  }
   return {
     id: raw.id,
     name: raw.name,
     defaultTagNames: defaults.filter((n): n is string => typeof n === 'string'),
+    ...(isObject(lock) ? { lock: { salt: lock.salt as string, hash: lock.hash as string } } : {}),
   };
 }
 
@@ -199,6 +206,10 @@ function parseTag(raw: unknown, n: number): Tag {
     throw new BackupError('badTag', { n });
   }
   return { id: raw.id, name: raw.name, value: raw.value };
+}
+
+function isHex(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]+$/i.test(value);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

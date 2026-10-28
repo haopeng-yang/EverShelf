@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { SettingsProvider } from '@/state/SettingsProvider';
+import { ShelfLockProvider } from '@/state/ShelfLockProvider';
 import { ShelfProvider } from '@/state/ShelfProvider';
 import { DATABASE_NAME, migrate } from '@/storage/database';
 import { AppThemeProvider, useTheme } from '@/theme';
@@ -15,7 +16,9 @@ export default function RootLayout() {
         <SettingsProvider>
           <AppThemeProvider>
             <ShelfProvider>
-              <ThemedStack />
+              <ShelfLockProvider>
+                <ThemedStack />
+              </ShelfLockProvider>
             </ShelfProvider>
           </AppThemeProvider>
         </SettingsProvider>

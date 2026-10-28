@@ -9,10 +9,12 @@ import { EpubError } from '@/books/parseEpub';
 import { CHAPTER_LENGTH, parseTxt, type ParsedChapter, type SplitRule } from '@/books/parseTxt';
 import { Button } from '@/components/Button';
 import { showMessage } from '@/components/dialogs';
+import { LockedScreen } from '@/components/LockedShelf';
 import { NotFound } from '@/components/NotFound';
 import { TextField } from '@/components/TextField';
 import type { Translate } from '@/i18n';
 import { useT } from '@/i18n/useT';
+import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
 import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
@@ -31,6 +33,7 @@ export default function ImportScreen() {
   const t = useT();
   const styles = useStyles();
   const shelf = state.shelves.find((s) => s.id === shelfId);
+  const { isLocked } = useShelfLocks();
 
   const [file, setFile] = useState<PickedBookFile | null>(null);
   const [picking, setPicking] = useState(false);
@@ -73,6 +76,7 @@ export default function ImportScreen() {
   useEffect(() => openPickerOnce(), []);
 
   if (!shelf) return <NotFound what="shelf" />;
+  if (isLocked(shelf)) return <LockedScreen shelf={shelf} />;
   const saving = progress !== null;
 
   async function save() {

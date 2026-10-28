@@ -35,7 +35,7 @@ export function ShelfTabs({ shelves, selectedId, onSelect, onEditShelf, onAddShe
             onLongPress={() => onEditShelf(shelf.id)}
             style={({ pressed }) => [styles.tab, selected && styles.tabSelected, pressed && styles.pressed]}>
             <Text style={[styles.label, selected && styles.labelSelected]}>
-              {shelf.name}
+              {shelf.lock ? `🔒 ${shelf.name}` : shelf.name}
             </Text>
           </Pressable>
         );

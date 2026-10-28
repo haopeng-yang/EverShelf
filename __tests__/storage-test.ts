@@ -27,6 +27,7 @@ import {
   CREATE_TABLES_V3,
   MIGRATE_V4,
   MIGRATE_V5,
+  MIGRATE_V6,
   SELECT_BOOK_ITEM_IDS,
   SELECT_BOOK_SUMMARIES,
   SELECT_BOOKMARKS,
@@ -37,6 +38,7 @@ import {
   SELECT_SHELVES,
   SELECT_TAGS,
   UPSERT_SETTING,
+  shelfLockRepair,
 } from '../src/storage/schema';
 import {
   finishedStatements,
@@ -52,13 +54,19 @@ import {
 function openTestDb(): DatabaseSync {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON;');
-  db.exec(CREATE_TABLES_V1);
+  migrateAll(db);
+  // Seeded after every upgrade, like migrate() in database.ts.
   run(db, insertState(createDefaultState()));
+  return db;
+}
+
+function migrateAll(db: DatabaseSync) {
+  db.exec(CREATE_TABLES_V1);
   db.exec(CREATE_TABLES_V2);
   db.exec(CREATE_TABLES_V3);
   db.exec(MIGRATE_V4);
   db.exec(MIGRATE_V5);
-  return db;
+  db.exec(MIGRATE_V6);
 }
 
 function chapters(itemId: Id, titles: string[]): Chapter[] {
@@ -315,5 +323,54 @@ describe('Book storage', () => {
       finishedAt: 8,
     });
     expect(db.prepare(SELECT_BOOKMARKS).all(itemId)).toHaveLength(1);
+  });
+});
+
+describe('Shelf locks', () => {
+  it('saves, changes and removes a shelf password hash', () => {
+    const db = openTestDb();
+    let state = createDefaultState();
+    const step = (action: ShelfAction) => {
+      state = dispatch(db, state, action);
+      expect(load(db)).toEqual(state);
+    };
+    step({ type: 'shelf/setLock', shelfId: 'books', lock: { salt: 'aa', hash: 'bb' } });
+    expect(state.shelves[0].lock).toEqual({ salt: 'aa', hash: 'bb' });
+    step({ type: 'shelf/rename', shelfId: 'books', name: 'Private' });
+    expect(load(db).shelves[0].lock).toEqual({ salt: 'aa', hash: 'bb' });
+    step({ type: 'shelf/setLock', shelfId: 'books', lock: { salt: 'cc', hash: 'dd' } });
+    step({ type: 'shelf/setLock', shelfId: 'books', lock: null });
+    expect('lock' in state.shelves[0]).toBe(false);
+    step(addShelf('Secret'));
+    step({ type: 'shelf/setLock', shelfId: state.shelves.at(-1)!.id, lock: { salt: 'ee', hash: 'ff' } });
+  });
+
+  it('upgrading an older database keeps its shelves, unlocked', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec(CREATE_TABLES_V1);
+    db.prepare("INSERT INTO shelves (id, name, position, default_tag_names) VALUES ('old', 'Old', 0, '[]')").run();
+    db.exec(CREATE_TABLES_V2);
+    db.exec(CREATE_TABLES_V3);
+    db.exec(MIGRATE_V4);
+    db.exec(MIGRATE_V5);
+    db.exec(MIGRATE_V6);
+    expect(load(db).shelves).toEqual([{ id: 'old', name: 'Old', defaultTagNames: [] }]);
+  });
+
+  it('repairs a database marked version 6 that is missing the lock columns', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec(CREATE_TABLES_V1);
+    db.exec(CREATE_TABLES_V2);
+    db.exec(CREATE_TABLES_V3);
+    db.exec(MIGRATE_V4);
+    db.exec(MIGRATE_V5);
+    // MIGRATE_V6 skipped, as happened with live reload.
+    db.prepare("INSERT INTO shelves (id, name, position, default_tag_names) VALUES ('s', 'Shelf', 0, '[]')").run();
+    const columns = () => db.prepare('PRAGMA table_info(shelves)').all().map((c) => String(c.name));
+
+    for (const sql of shelfLockRepair(columns())) db.exec(sql);
+    expect(load(db).shelves).toEqual([{ id: 's', name: 'Shelf', defaultTagNames: [] }]);
+    // On a database that already has them, it does nothing.
+    expect(shelfLockRepair(columns())).toEqual([]);
   });
 });
