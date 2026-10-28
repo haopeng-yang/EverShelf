@@ -1,4 +1,4 @@
-import type { Item, Shelf, ShelfState, Tag } from '../models/types';
+import type { Chapter, Item, ReadingProgress, Shelf, ShelfState, Tag } from '../models/types';
 
 // Plain rows as they come out of the tables in schema.ts.
 
@@ -24,6 +24,22 @@ export interface TagRow {
   name: string;
   value: string;
   position: number;
+}
+
+export interface ChapterRow {
+  id: string;
+  item_id: string;
+  position: number;
+  title: string;
+  file_name: string;
+  char_count: number;
+}
+
+export interface ProgressRow {
+  item_id: string;
+  chapter_id: string;
+  scroll_offset: number;
+  updated_at: number;
 }
 
 /** Builds app state from rows already sorted by the SELECT_* queries. */
@@ -73,6 +89,37 @@ export function itemToRow(item: Item): ItemRow {
 
 export function tagToRow(itemId: string, tag: Tag, position: number): TagRow {
   return { id: tag.id, item_id: itemId, name: tag.name, value: tag.value, position };
+}
+
+export function chapterToRow(chapter: Chapter): ChapterRow {
+  return {
+    id: chapter.id,
+    item_id: chapter.itemId,
+    position: chapter.position,
+    title: chapter.title,
+    file_name: chapter.fileName,
+    char_count: chapter.charCount,
+  };
+}
+
+export function rowToChapter(row: ChapterRow): Chapter {
+  return {
+    id: row.id,
+    itemId: row.item_id,
+    position: row.position,
+    title: row.title,
+    fileName: row.file_name,
+    charCount: row.char_count,
+  };
+}
+
+export function rowToProgress(row: ProgressRow): ReadingProgress {
+  return {
+    itemId: row.item_id,
+    chapterId: row.chapter_id,
+    scrollOffset: row.scroll_offset,
+    updatedAt: row.updated_at,
+  };
 }
 
 function parseStringArray(json: string): string[] {

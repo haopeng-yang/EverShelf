@@ -15,6 +15,7 @@ import { newId } from '@/models/ids';
 import { moveInArray } from '@/models/shelfReducer';
 import type { Id, Item, Tag } from '@/models/types';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
+import { deleteBookFiles } from '@/storage/bookFiles';
 import { deleteCover, saveCover } from '@/storage/covers';
 import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
@@ -110,6 +111,7 @@ export default function EditItemScreen() {
     if (!ok) return;
     dispatch({ type: 'item/remove', itemId: original.id });
     deleteCover(original.coverUri);
+    deleteBookFiles(original.id);
     router.dismissTo('/');
   }
 

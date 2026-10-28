@@ -2,7 +2,7 @@
 // run the same SQL against Node's built-in SQLite.
 
 /** Bump this and add a step in database.ts `migrate` whenever the tables change. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const CREATE_TABLES_V1 = `
 CREATE TABLE shelves (
@@ -38,7 +38,37 @@ CREATE TABLE settings (
 );
 `;
 
-export const SELECT_SETTINGS = 'SELECT key, value FROM settings';
+/**
+ * Version 3: books. An item with chapters is a readable book; chapter text is
+ * stored in files, not here. Both tables cascade when the item is deleted.
+ */
+export const CREATE_TABLES_V3 = `
+CREATE TABLE chapters (
+  id TEXT PRIMARY KEY NOT NULL,
+  item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  char_count INTEGER NOT NULL
+);
+CREATE INDEX chapters_item_id ON chapters(item_id, position);
+CREATE TABLE reading_progress (
+  item_id TEXT PRIMARY KEY NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  chapter_id TEXT NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+  scroll_offset REAL NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+`;
+
+export const SELECT_CHAPTERS =
+  'SELECT id, item_id, position, title, file_name, char_count FROM chapters WHERE item_id = ? ORDER BY position';
+export const SELECT_BOOK_ITEM_IDS = 'SELECT DISTINCT item_id FROM chapters';
+export const SELECT_PROGRESS =
+  'SELECT item_id, chapter_id, scroll_offset, updated_at FROM reading_progress WHERE item_id = ?';
+export const UPSERT_PROGRESS = `INSERT INTO reading_progress (item_id, chapter_id, scroll_offset, updated_at) VALUES (?, ?, ?, ?)
+ON CONFLICT(item_id) DO UPDATE SET chapter_id = excluded.chapter_id, scroll_offset = excluded.scroll_offset, updated_at = excluded.updated_at`;
+
+export const SELECT_SETTINGS ='SELECT key, value FROM settings';
 export const UPSERT_SETTING =
   'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value';
 

@@ -12,6 +12,7 @@ import { addShelf } from '@/models/actions';
 import { newId } from '@/models/ids';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
+import { deleteBookFiles } from '@/storage/bookFiles';
 import { deleteCover } from '@/storage/covers';
 import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
@@ -69,7 +70,10 @@ export default function EditShelfScreen() {
     );
     if (!ok) return;
     dispatch({ type: 'shelf/remove', shelfId: shelf.id });
-    items.forEach((item) => deleteCover(item.coverUri));
+    items.forEach((item) => {
+      deleteCover(item.coverUri);
+      deleteBookFiles(item.id);
+    });
     router.back();
   }
 

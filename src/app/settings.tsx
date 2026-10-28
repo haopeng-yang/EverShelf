@@ -12,6 +12,7 @@ import { useSettings, type LanguageSetting, type ThemeMode } from '@/state/Setti
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
 import { pickBackupFile } from '@/storage/backupFiles';
 import { exportBackup, restoreBackupCovers } from '@/storage/backupFlow';
+import { pruneBooks } from '@/storage/bookFiles';
 import { pruneCovers } from '@/storage/covers';
 import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
@@ -68,6 +69,9 @@ export default function SettingsScreen() {
       const restored = await restoreBackupCovers(backup);
       dispatch({ type: 'state/replace', state: restored });
       pruneCovers(restored);
+      // Replacing the shelves deletes every chapter row, and backups don't hold
+      // books yet, so no book folder is still in use.
+      pruneBooks(new Set());
       showMessage(
         t('settings.restored', { shelves: restored.shelves.length, items: restored.items.length }),
         t('settings.restoredTitle'),

@@ -1,6 +1,7 @@
 import type { ShelfAction } from '../models/shelfReducer';
-import type { Item, Shelf, ShelfState } from '../models/types';
-import { itemToRow, shelfToRow, tagToRow } from './rows';
+import type { Chapter, Id, Item, ReadingProgress, Shelf, ShelfState } from '../models/types';
+import { chapterToRow, itemToRow, shelfToRow, tagToRow } from './rows';
+import { UPSERT_PROGRESS } from './schema';
 
 export type SqlValue = string | number | null;
 
@@ -96,6 +97,30 @@ export function insertState(state: ShelfState): Statement[] {
     ...state.shelves.map((s, index) => insertShelf(s, index)),
     ...state.items.flatMap(insertItem),
   ];
+}
+
+/**
+ * Replaces a book's chapter list. Removing the old chapters also clears the
+ * book's reading progress (it points at a chapter that no longer exists).
+ */
+export function replaceChapters(itemId: Id, chapters: Chapter[]): Statement[] {
+  return [
+    { sql: 'DELETE FROM chapters WHERE item_id = ?', params: [itemId] },
+    ...chapters.map((chapter) => {
+      const row = chapterToRow(chapter);
+      return {
+        sql: 'INSERT INTO chapters (id, item_id, position, title, file_name, char_count) VALUES (?, ?, ?, ?, ?, ?)',
+        params: [row.id, row.item_id, row.position, row.title, row.file_name, row.char_count],
+      };
+    }),
+  ];
+}
+
+export function saveProgressStatement(progress: ReadingProgress): Statement {
+  return {
+    sql: UPSERT_PROGRESS,
+    params: [progress.itemId, progress.chapterId, progress.scrollOffset, progress.updatedAt],
+  };
 }
 
 function insertShelf(shelf: Shelf, position: number): Statement {

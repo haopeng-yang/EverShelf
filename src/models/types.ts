@@ -28,6 +28,29 @@ export interface Shelf {
   defaultTagNames: string[];
 }
 
+/**
+ * One chapter of an imported book. The text itself lives in a file
+ * (books/<itemId>/<fileName>); only this summary is kept in SQLite.
+ */
+export interface Chapter {
+  id: Id;
+  itemId: Id;
+  /** 0-based reading order. */
+  position: number;
+  title: string;
+  fileName: string;
+  charCount: number;
+}
+
+/** Where the user stopped reading a book. */
+export interface ReadingProgress {
+  itemId: Id;
+  chapterId: Id;
+  /** Scroll position within the chapter, in pixels. */
+  scrollOffset: number;
+  updatedAt: number;
+}
+
 export interface ShelfState {
   /** Shelves in tab order. */
   shelves: Shelf[];

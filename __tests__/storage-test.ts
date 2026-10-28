@@ -6,18 +6,37 @@ import { DatabaseSync } from 'node:sqlite';
 import { addItem, addShelf, addTag } from '../src/models/actions';
 import { createDefaultState } from '../src/models/defaults';
 import { shelfReducer, type ShelfAction } from '../src/models/shelfReducer';
-import type { ShelfState } from '../src/models/types';
-import { rowsToState, type ItemRow, type ShelfRow, type TagRow } from '../src/storage/rows';
+import type { Chapter, Id, ShelfState } from '../src/models/types';
+import {
+  rowsToState,
+  rowToChapter,
+  rowToProgress,
+  type ChapterRow,
+  type ItemRow,
+  type ProgressRow,
+  type ShelfRow,
+  type TagRow,
+} from '../src/storage/rows';
 import {
   CREATE_TABLES_V1,
   CREATE_TABLES_V2,
+  CREATE_TABLES_V3,
+  SELECT_BOOK_ITEM_IDS,
+  SELECT_CHAPTERS,
   SELECT_ITEMS,
+  SELECT_PROGRESS,
   SELECT_SETTINGS,
   SELECT_SHELVES,
   SELECT_TAGS,
   UPSERT_SETTING,
 } from '../src/storage/schema';
-import { insertState, statementsForAction, type Statement } from '../src/storage/statements';
+import {
+  insertState,
+  replaceChapters,
+  saveProgressStatement,
+  statementsForAction,
+  type Statement,
+} from '../src/storage/statements';
 
 function openTestDb(): DatabaseSync {
   const db = new DatabaseSync(':memory:');
@@ -25,7 +44,31 @@ function openTestDb(): DatabaseSync {
   db.exec(CREATE_TABLES_V1);
   run(db, insertState(createDefaultState()));
   db.exec(CREATE_TABLES_V2);
+  db.exec(CREATE_TABLES_V3);
   return db;
+}
+
+function chapters(itemId: Id, titles: string[]): Chapter[] {
+  return titles.map((title, position) => ({
+    id: `${itemId}-ch${position}`,
+    itemId,
+    position,
+    title,
+    fileName: `${position}.txt`,
+    charCount: 1000 + position,
+  }));
+}
+
+function loadChapters(db: DatabaseSync, itemId: Id): Chapter[] {
+  return db
+    .prepare(SELECT_CHAPTERS)
+    .all(itemId)
+    .map((r) => rowToChapter({ ...r } as unknown as ChapterRow));
+}
+
+function loadProgress(db: DatabaseSync, itemId: Id) {
+  const row = db.prepare(SELECT_PROGRESS).get(itemId);
+  return row ? rowToProgress({ ...row } as unknown as ProgressRow) : null;
 }
 
 function run(db: DatabaseSync, statements: Statement[]) {
@@ -107,5 +150,65 @@ describe('SQLite storage', () => {
     replacement = shelfReducer(replacement, addItem(replacement.shelves[0], 'Celeste'));
     const state = dispatch(db, createDefaultState(), { type: 'state/replace', state: replacement });
     expect(load(db)).toEqual(state);
+  });
+});
+
+describe('Book storage', () => {
+  /** A database with one item, "Dune", on the Books shelf. */
+  function withBook() {
+    const db = openTestDb();
+    const state = dispatch(db, createDefaultState(), addItem(createDefaultState().shelves[0], 'Dune'));
+    return { db, state, itemId: state.items[0].id };
+  }
+
+  it('saves chapters and loads them back in order', () => {
+    const { db, itemId } = withBook();
+    const saved = chapters(itemId, ['Prologue', 'Chapter 1', 'Chapter 2']);
+    run(db, replaceChapters(itemId, [...saved].reverse()));
+    expect(loadChapters(db, itemId)).toEqual(saved);
+    expect(db.prepare(SELECT_BOOK_ITEM_IDS).all().map((r) => ({ ...r }))).toEqual([{ item_id: itemId }]);
+  });
+
+  it('replacing chapters drops the old ones and their progress', () => {
+    const { db, itemId } = withBook();
+    run(db, replaceChapters(itemId, chapters(itemId, ['Old 1', 'Old 2'])));
+    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch1`, scrollOffset: 10, updatedAt: 1 })]);
+
+    const fresh = chapters(itemId, ['New']).map((c) => ({ ...c, id: 'new-ch' }));
+    run(db, replaceChapters(itemId, fresh));
+    expect(loadChapters(db, itemId)).toEqual(fresh);
+    expect(loadProgress(db, itemId)).toBeNull();
+  });
+
+  it('saves and overwrites reading progress', () => {
+    const { db, itemId } = withBook();
+    run(db, replaceChapters(itemId, chapters(itemId, ['One', 'Two'])));
+    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch0`, scrollOffset: 120.5, updatedAt: 1 })]);
+    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch1`, scrollOffset: 40, updatedAt: 2 })]);
+    expect(loadProgress(db, itemId)).toEqual({ itemId, chapterId: `${itemId}-ch1`, scrollOffset: 40, updatedAt: 2 });
+  });
+
+  it('editing the item keeps its chapters; deleting it removes them', () => {
+    const book = withBook();
+    const { db, itemId } = book;
+    const saved = chapters(itemId, ['One']);
+    run(db, replaceChapters(itemId, saved));
+    run(db, [saveProgressStatement({ itemId, chapterId: saved[0].id, scrollOffset: 0, updatedAt: 1 })]);
+
+    const item = book.state.items[0];
+    const state = dispatch(db, book.state, { type: 'item/save', item: { ...item, title: 'Dune (1965)' }, now: 5 });
+    expect(loadChapters(db, itemId)).toEqual(saved);
+
+    dispatch(db, state, { type: 'item/remove', itemId });
+    expect(loadChapters(db, itemId)).toEqual([]);
+    expect(loadProgress(db, itemId)).toBeNull();
+  });
+
+  it('replacing the whole state removes every book', () => {
+    const { db, state, itemId } = withBook();
+    run(db, replaceChapters(itemId, chapters(itemId, ['One'])));
+    // A copy, as a restored backup would be: the reducer skips identical states.
+    dispatch(db, state, { type: 'state/replace', state: { ...state } });
+    expect(db.prepare(SELECT_BOOK_ITEM_IDS).all()).toEqual([]);
   });
 });
