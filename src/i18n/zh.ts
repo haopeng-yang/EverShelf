@@ -174,6 +174,8 @@ export const zh: Translations = {
   'import.empty': '此文件没有可导入的文字。',
   'import.unsupported': '“{name}”不是 .txt 或 .epub 文件，无法导入。',
   'import.hasCover': '包含封面图片',
+  'import.noFileName': '（无法获取文件名）',
+  'import.unsupportedUnnamed': '此文件不是 .txt 或 .epub 书籍，无法导入。',
   'import.epubInvalid': '此文件不是可读取的 EPUB，可能已损坏。',
   'import.epubDrm': '此 EPUB 受版权保护（DRM），EverShelf 无法读取。',
   'import.epubNoText': '此 EPUB 没有可导入的文字，可能只包含图片。',

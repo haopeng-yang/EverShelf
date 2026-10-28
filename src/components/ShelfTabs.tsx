@@ -34,7 +34,9 @@ export function ShelfTabs({ shelves, selectedId, onSelect, onEditShelf, onAddShe
             onPress={() => onSelect(shelf.id)}
             onLongPress={() => onEditShelf(shelf.id)}
             style={({ pressed }) => [styles.tab, selected && styles.tabSelected, pressed && styles.pressed]}>
-            <Text style={[styles.label, selected && styles.labelSelected]}>{shelf.name}</Text>
+            <Text style={[styles.label, selected && styles.labelSelected]}>
+              {shelf.name}
+            </Text>
           </Pressable>
         );
       })}
@@ -50,7 +52,9 @@ export function ShelfTabs({ shelves, selectedId, onSelect, onEditShelf, onAddShe
 }
 
 const useStyles = makeStyles((c) => ({
-  bar: { flexGrow: 0, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border },
+  // A ScrollView may shrink by default, so a long item list below squeezed this
+  // row and clipped the tabs. flexShrink: 0 keeps it at its full height.
+  bar: { flexGrow: 0, flexShrink: 0, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border },
   content: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   tab: {
     paddingVertical: spacing.sm,

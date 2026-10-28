@@ -182,6 +182,8 @@ export const en = {
   'import.empty': 'This file has no text to import.',
   'import.unsupported': '“{name}” is not a .txt or .epub file, so it can’t be imported.',
   'import.hasCover': 'Cover image included',
+  'import.noFileName': '(file name not available)',
+  'import.unsupportedUnnamed': 'This file isn’t a .txt or .epub book, so it can’t be imported.',
   'import.epubInvalid': 'This file is not a readable EPUB. It may be damaged.',
   'import.epubDrm': 'This EPUB is copy-protected (DRM), so EverShelf can’t read it.',
   'import.epubNoText': 'This EPUB has no text to import. It may contain only images.',

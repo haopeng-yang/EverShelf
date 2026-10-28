@@ -132,7 +132,7 @@ export default function ImportScreen() {
         <>
           <View style={styles.section}>
             <Text style={styles.label}>{t('import.file')}</Text>
-            <Text style={styles.value}>{file.name}</Text>
+            <Text style={styles.value}>{file.name || t('import.noFileName')}</Text>
             {file.kind === 'txt' && (
               <Text style={styles.hint}>{t('import.encoding', { encoding: file.encoding.toUpperCase() })}</Text>
             )}
@@ -205,7 +205,9 @@ function withTitles(chapters: ParsedChapter[], t: Translate): ParsedChapter[] {
 }
 
 function errorText(error: unknown, t: Translate): string {
-  if (error instanceof UnsupportedFileError) return t('import.unsupported', { name: error.message });
+  if (error instanceof UnsupportedFileError) {
+    return error.message ? t('import.unsupported', { name: error.message }) : t('import.unsupportedUnnamed');
+  }
   if (error instanceof EpubError) {
     if (error.code === 'drm') return t('import.epubDrm');
     if (error.code === 'noText') return t('import.epubNoText');

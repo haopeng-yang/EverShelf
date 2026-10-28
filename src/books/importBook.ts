@@ -1,4 +1,3 @@
-import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
@@ -10,11 +9,13 @@ import { chapterFileName, deleteBookFiles, writeChapterText } from '../storage/b
 import { deleteCover, writeCoverBytes } from '../storage/covers';
 import { saveChapters } from '../storage/database';
 import { decodeText, type TextEncodingName } from './decodeText';
+import { detectFormat, hasExtension } from './detectFormat';
 import { parseEpub, type ParsedEpub } from './parseEpub';
 import type { ParsedChapter } from './parseTxt';
 
 /** A picked file, read but not saved yet. TXT is split later, so the split rule can still change. */
 export type PickedBookFile =
+  // name is '' when the picker gave no real file name (an Android content link).
   | { kind: 'txt'; name: string; text: string; encoding: TextEncodingName }
   | { kind: 'epub'; name: string; book: ParsedEpub };
 
@@ -22,25 +23,34 @@ export class UnsupportedFileError extends Error {}
 
 /** Opens the system file picker for a .txt or .epub file. Null if the user cancels. */
 export async function pickBookFile(): Promise<PickedBookFile | null> {
-  // Some file managers report book files as octet-stream, so accept anything
-  // and check the extension ourselves.
-  const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
-  if (result.canceled) return null;
-  const asset = result.assets[0];
-  const extension = /\.(\w+)$/.exec(asset.name)?.[1]?.toLowerCase();
-  if (extension !== 'txt' && extension !== 'epub') throw new UnsupportedFileError(asset.name);
-  const file = new File(asset.uri);
+  // expo-file-system's own picker returns a File the app is allowed to read;
+  // reading expo-document-picker's result with File was refused on Android
+  // ("missing READ permission"). Any type is accepted, since some file
+  // managers report book files as octet-stream; detectFormat checks the file.
+  // This is the user's own file, so it is only read, never deleted.
+  const picked = await File.pickFileAsync({ mimeTypes: '*/*' });
+  if (picked.canceled || !picked.result) return null;
+  const file = picked.result;
+  // A content link's "name" is an id like "msf:1000033298"; don't show that as a file name.
+  const name = hasExtension(file.name) ? file.name : '';
+  const bytes = await readBytes(file);
+  const format = detectFormat(bytes, file.name, file.type);
+  if (!format) throw new UnsupportedFileError(name);
+  if (format === 'epub') return { kind: 'epub', name, book: parseEpub(bytes) };
+  const { text, encoding } = decodeText(bytes);
+  return { kind: 'txt', name, text, encoding };
+}
+
+/** Reads a picked file, falling back to fetch for URIs the File API won't open (as the backup import does). */
+async function readBytes(file: File): Promise<Uint8Array> {
   try {
-    const bytes = await file.bytes();
-    if (extension === 'epub') return { kind: 'epub', name: asset.name, book: parseEpub(bytes) };
-    const { text, encoding } = decodeText(bytes);
-    return { kind: 'txt', name: asset.name, text, encoding };
-  } finally {
+    return await file.bytes();
+  } catch (fileError) {
+    console.warn('File API could not read the book, trying fetch', file.uri, fileError);
     try {
-      // The picker's copy is only needed until it has been read.
-      file.delete();
+      return new Uint8Array(await (await fetch(file.uri)).arrayBuffer());
     } catch {
-      // The system clears the cache eventually anyway.
+      throw fileError;
     }
   }
 }

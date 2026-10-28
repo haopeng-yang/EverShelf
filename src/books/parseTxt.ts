@@ -53,7 +53,7 @@ export function parseTxt(rawText: string, fileName: string, rule: SplitRule = 'h
   const headingCount = lines.filter(isChapterHeading).length;
   const useHeadings = rule === 'headings' && headingCount >= 2;
   return {
-    title: meta.title || titleFromFileName(fileName),
+    title: meta.title || titleFromFileName(fileName) || firstLineTitle(lines),
     author: meta.author,
     chapters: useHeadings ? splitByHeadings(lines) : splitByLength(lines),
     rule: useHeadings ? 'headings' : 'length',
@@ -87,6 +87,15 @@ function findMetadata(text: string): { title: string; author: string } {
     title: find(/^(?:title|书名|書名|标题)\s*[:：]\s*(.+)$/i),
     author: find(/^(?:author|作者)\s*[:：]\s*(.+)$/i),
   };
+}
+
+/**
+ * With no file name to go on (an Android content link), a short first line
+ * is usually the title. A chapter heading or a long sentence isn't.
+ */
+function firstLineTitle(paragraphs: string[]): string {
+  const first = paragraphs[0]?.replace(/^《(.+)》$/, '$1').trim() ?? '';
+  return first.length > 0 && first.length <= 40 && !isChapterHeading(first) ? first : '';
 }
 
 /** "《Dune》作者：Frank Herbert.txt" → "Dune"; "my_novel.txt" → "my novel". */
