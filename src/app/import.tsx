@@ -4,7 +4,10 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { pickBookFile, saveImportedBook, UnsupportedFileError, type PickedBookFile } from '@/books/importBook';
+import { guessReadingMode } from '@/books/comic/parseComic';
+import { ZipError } from '@/books/comic/zip';
+import { MixedFilesError, pickBookFile, saveImportedBook, UnsupportedFileError, type PickedBookFile } from '@/books/importBook';
+import { ComicError, disposeComic, saveImportedComic } from '@/books/importComic';
 import { EpubError } from '@/books/parseEpub';
 import { CHAPTER_LENGTH, parseTxt, type ParsedChapter, type SplitRule } from '@/books/parseTxt';
 import { Button } from '@/components/Button';
@@ -14,6 +17,7 @@ import { NotFound } from '@/components/NotFound';
 import { TextField } from '@/components/TextField';
 import type { Translate } from '@/i18n';
 import { useT } from '@/i18n/useT';
+import type { ReadingMode } from '@/models/types';
 import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
 import { fontSize, makeStyles, radius, spacing } from '@/theme';
@@ -21,9 +25,12 @@ import { fontSize, makeStyles, radius, spacing } from '@/theme';
 /** How many chapter titles the preview lists before "and N more". */
 const PREVIEW_CHAPTERS = 30;
 
+const READING_MODES: ReadingMode[] = ['ltr', 'rtl', 'vertical'];
+
 /**
- * Import a .txt or .epub book onto a shelf: pick a file, check how it was
- * split into chapters, fix the title or author, then save it as a new item.
+ * Import a .txt or .epub book, or one or more comic files, onto a shelf: pick
+ * the file(s), check the chapters, fix the title or author (and a comic's
+ * reading direction), then save it as a new item.
  */
 export default function ImportScreen() {
   const { shelfId } = useLocalSearchParams<{ shelfId: string }>();
@@ -40,7 +47,14 @@ export default function ImportScreen() {
   const [rule, setRule] = useState<SplitRule>('headings');
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
+  const [readingMode, setReadingMode] = useState<ReadingMode>('ltr');
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+
+  // Comics may have copied a file to the cache while picking; drop it when it's replaced or the screen closes.
+  useEffect(() => {
+    if (file?.kind !== 'comic') return;
+    return () => disposeComic(file.comic);
+  }, [file]);
 
   // TXT files are split here, so changing the rule re-splits; EPUBs come with their chapters.
   const txt = useMemo(() => (file?.kind === 'txt' ? parseTxt(file.text, file.name, rule) : null), [file, rule]);
@@ -48,15 +62,33 @@ export default function ImportScreen() {
     const raw = file?.kind === 'epub' ? file.book.chapters : (txt?.chapters ?? []);
     return withTitles(raw, t);
   }, [file, txt, t]);
+  // What the chapter list shows: a title and a size, for books and comics alike.
+  const chapterRows = useMemo(
+    () =>
+      file?.kind === 'comic'
+        ? file.comic.chapters.map((c, index) => ({
+            title: c.title || t('import.chapterN', { n: index + 1 }),
+            size: t('import.pages', { count: c.pages.length }),
+          }))
+        : chapters.map((c) => ({ title: c.title, size: t('import.chars', { count: c.text.length }) })),
+    [file, chapters, t],
+  );
 
   async function choose() {
     setPicking(true);
     try {
       const picked = await pickBookFile();
       if (!picked) return;
-      const meta = picked.kind === 'epub' ? picked.book : parseTxt(picked.text, picked.name, 'headings');
       setFile(picked);
       setRule('headings');
+      if (picked.kind === 'comic') {
+        const { comic } = picked;
+        setTitle(comic.title);
+        setAuthor(comic.author);
+        setReadingMode(guessReadingMode({ rightToLeft: comic.rightToLeft, shelfId: shelfId ?? '', sizes: comic.sampleSizes }));
+        return;
+      }
+      const meta = picked.kind === 'epub' ? picked.book : parseTxt(picked.text, picked.name, 'headings');
       setTitle(meta.title || picked.name.replace(/\.\w+$/, ''));
       setAuthor(meta.author);
     } catch (error) {
@@ -85,8 +117,31 @@ export default function ImportScreen() {
       showMessage(t('itemEdit.needTitle'));
       return;
     }
-    if (chapters.length === 0) {
+    if (chapterRows.length === 0) {
       showMessage(t('import.empty'));
+      return;
+    }
+    if (file.kind === 'comic') {
+      setProgress({ done: 0, total: file.comic.pageCount });
+      try {
+        const item = await saveImportedComic(
+          db,
+          dispatch,
+          {
+            shelf,
+            title: title.trim(),
+            tagValues: { [t('tag.author')]: author, [t('tag.description')]: file.comic.description },
+            comic: file.comic,
+            readingMode,
+            chapterTitles: chapterRows.map((row) => row.title),
+          },
+          (done, total) => setProgress({ done, total }),
+        );
+        router.replace({ pathname: '/item/[id]', params: { id: item.id } });
+      } catch (error) {
+        setProgress(null);
+        showMessage(error instanceof ComicError ? errorText(error, t) : t('import.saveFailed', { error: String(error) }));
+      }
       return;
     }
     setProgress({ done: 0, total: chapters.length });
@@ -125,7 +180,9 @@ export default function ImportScreen() {
       {saving ? (
         <View style={styles.center}>
           <ActivityIndicator />
-          <Text style={styles.hint}>{t('import.saving', { done: progress.done, total: progress.total })}</Text>
+          <Text style={styles.hint}>
+            {t(file?.kind === 'comic' ? 'import.savingPages' : 'import.saving', { done: progress.done, total: progress.total })}
+          </Text>
         </View>
       ) : !file ? (
         <View style={styles.center}>
@@ -141,6 +198,16 @@ export default function ImportScreen() {
               <Text style={styles.hint}>{t('import.encoding', { encoding: file.encoding.toUpperCase() })}</Text>
             )}
             {file.kind === 'epub' && file.book.cover && <Text style={styles.hint}>{t('import.hasCover')}</Text>}
+            {file.kind === 'comic' && (
+              <Text style={styles.hint}>
+                {[
+                  file.comic.files.length > 1 ? t('import.files', { count: file.comic.files.length }) : '',
+                  t('import.pages', { count: file.comic.pageCount }),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Text>
+            )}
             <Button title={t('import.chooseOther')} compact onPress={choose} style={styles.alignStart} />
           </View>
 
@@ -177,19 +244,35 @@ export default function ImportScreen() {
             </View>
           )}
 
+          {file.kind === 'comic' && (
+            <View style={styles.section}>
+              <Text style={styles.label}>{t('import.readingMode')}</Text>
+              {READING_MODES.map((mode) => (
+                <Button
+                  key={mode}
+                  title={`${t(`readingMode.${mode}`)} · ${t(`readingMode.${mode}Hint`)}`}
+                  variant={readingMode === mode ? 'primary' : 'secondary'}
+                  compact
+                  onPress={() => setReadingMode(mode)}
+                />
+              ))}
+              <Text style={styles.hint}>{t('import.readingModeHint')}</Text>
+            </View>
+          )}
+
           <View style={styles.section}>
-            <Text style={styles.label}>{t('import.chapters', { count: chapters.length })}</Text>
+            <Text style={styles.label}>{t('import.chapters', { count: chapterRows.length })}</Text>
             <View style={styles.chapterList}>
-              {chapters.slice(0, PREVIEW_CHAPTERS).map((chapter, index) => (
+              {chapterRows.slice(0, PREVIEW_CHAPTERS).map((chapter, index) => (
                 <View key={index} style={styles.chapterRow}>
                   <Text style={styles.chapterTitle} numberOfLines={1}>
                     {chapter.title}
                   </Text>
-                  <Text style={styles.hint}>{t('import.chars', { count: chapter.text.length })}</Text>
+                  <Text style={styles.hint}>{chapter.size}</Text>
                 </View>
               ))}
-              {chapters.length > PREVIEW_CHAPTERS && (
-                <Text style={styles.hint}>{t('import.more', { count: chapters.length - PREVIEW_CHAPTERS })}</Text>
+              {chapterRows.length > PREVIEW_CHAPTERS && (
+                <Text style={styles.hint}>{t('import.more', { count: chapterRows.length - PREVIEW_CHAPTERS })}</Text>
               )}
             </View>
           </View>
@@ -211,6 +294,14 @@ function withTitles(chapters: ParsedChapter[], t: Translate): ParsedChapter[] {
 function errorText(error: unknown, t: Translate): string {
   if (error instanceof UnsupportedFileError) {
     return error.message ? t('import.unsupported', { name: error.message }) : t('import.unsupportedUnnamed');
+  }
+  if (error instanceof MixedFilesError) return t('import.mixedFiles');
+  if (error instanceof ComicError) return t(error.code === 'noSpace' ? 'import.comicNoSpace' : 'import.comicNoPages');
+  if (error instanceof ZipError) {
+    if (error.code === 'tooLarge') return t('import.comicTooLarge');
+    if (error.code === 'encrypted') return t('import.comicEncrypted');
+    if (error.code === 'unsupported') return t('import.comicUnsupported');
+    return t('import.comicDamaged');
   }
   if (error instanceof EpubError) {
     if (error.code === 'drm') return t('import.epubDrm');

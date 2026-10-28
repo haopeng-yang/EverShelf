@@ -34,10 +34,24 @@ export function pageFileName(chapterPosition: number, pagePosition: number, exte
 
 /** The page image's file URI, for showing it. Null if the name isn't a page file name. */
 export function pageUri(itemId: Id, fileName: string): string | null {
+  return pageFile(itemId, fileName)?.file.uri ?? null;
+}
+
+/** Writes (or overwrites) one comic page's image. */
+export async function writePageBytes(itemId: Id, fileName: string, bytes: Uint8Array): Promise<void> {
+  const page = pageFile(itemId, fileName);
+  if (!page) throw new Error(`Invalid page file name: ${fileName}`);
+  page.folder.create({ idempotent: true, intermediates: true });
+  page.file.create({ overwrite: true });
+  await page.file.write(bytes);
+}
+
+function pageFile(itemId: Id, fileName: string): { folder: Directory; file: File } | null {
   // Like ids, page names can come from backups, so never let one reach outside the book's folder.
   const match = /^(\d+)\/(\d+\.[a-z0-9]+)$/.exec(fileName);
   if (!match) return null;
-  return new File(bookDirectory(itemId), match[1], match[2]).uri;
+  const folder = new Directory(bookDirectory(itemId), match[1]);
+  return { folder, file: new File(folder, match[2]) };
 }
 
 /** Writes (or overwrites) one chapter's text. */

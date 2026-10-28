@@ -19,6 +19,10 @@ export function pageUri(_itemId: Id, _fileName: string): string | null {
   return null;
 }
 
+export async function writePageBytes(_itemId: Id, _fileName: string, _bytes: Uint8Array): Promise<void> {
+  throw new Error('Comics are not supported on web yet');
+}
+
 export async function writeChapterText(_itemId: Id, _fileName: string, _text: string): Promise<void> {
   throw new Error('Books are not supported on web yet');
 }

@@ -12,13 +12,17 @@ describe('detectFormat', () => {
     expect(detectFormat(text, 'novel.txt', '')).toBe('txt');
     expect(detectFormat(zip, 'novel.EPUB', '')).toBe('epub');
     expect(detectFormat(text, 'novel.pdf', '')).toBeNull();
+    expect(detectFormat(zip, 'Akira v01.CBZ', '')).toBe('comic');
+    expect(detectFormat(zip, 'Akira v01.zip', '')).toBe('zip');
+    expect(detectFormat(zip, 'Akira v01.cbr', '')).toBeNull();
   });
 
   it('looks at the file itself for Android content links with no extension', () => {
     expect(hasExtension('msf:1000033298')).toBe(false);
     expect(detectFormat(text, 'msf:1000033298', '')).toBe('txt');
     expect(detectFormat(text, 'msf:1000033298', 'application/octet-stream')).toBe('txt');
-    expect(detectFormat(zip, 'msf:1000033298', '')).toBe('epub');
+    // A ZIP could be an EPUB or a comic; importBook looks inside to tell.
+    expect(detectFormat(zip, 'msf:1000033298', '')).toBe('zip');
     expect(detectFormat(new Uint8Array([1, 2]), 'document:12', 'application/epub+zip')).toBe('epub');
     expect(detectFormat(png, 'msf:42', 'image/png')).toBeNull();
   });

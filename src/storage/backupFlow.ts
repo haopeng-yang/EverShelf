@@ -5,7 +5,7 @@ import type { Id, Item, ShelfState } from '../models/types';
 import { shareBackupFile } from './backupFiles';
 import { chapterFileName, deleteBookFiles, pruneBooks, readChapterText, writeChapterText } from './bookFiles';
 import { readCoverAsDataUri, writeCoverFromDataUri } from './covers';
-import { loadBookItemIds, loadBookmarks, loadChapters, loadProgress, runStatements } from './database';
+import { loadBookInfo, loadBookItemIds, loadBookmarks, loadChapters, loadProgress, runStatements } from './database';
 import { restoreBookStatements } from './statements';
 
 /**
@@ -30,6 +30,8 @@ async function collectBooks(db: SQLiteDatabase, state: ShelfState): Promise<Back
   const books: BackupBook[] = [];
   for (const item of state.items) {
     if (!bookIds.has(item.id)) continue;
+    // Comic pages are images, far too big for this backup; comics are backed up as plain items for now.
+    if ((await loadBookInfo(db, item.id)).kind === 'comic') continue;
     const [chapters, progress, bookmarks] = await Promise.all([
       loadChapters(db, item.id),
       loadProgress(db, item.id),

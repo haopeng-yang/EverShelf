@@ -1,6 +1,6 @@
 import { newId } from './ids';
 import type { ShelfAction } from './shelfReducer';
-import type { Id, Item, Shelf, ShelfLock } from './types';
+import type { Id, Item, Shelf, ShelfLock, Tag } from './types';
 
 /**
  * Helpers that build actions with fresh ids and timestamps, so screens can
@@ -28,6 +28,22 @@ export function newItemDraft(shelf: Shelf, title = '', coverUri: string | null =
     createdAt: now,
     updatedAt: now,
   };
+}
+
+/**
+ * Fills tags by name, e.g. { Author: 'Mira Holt' }: a tag the item already has
+ * (from its shelf's defaults) gets the value; others are added. Empty values are skipped.
+ */
+export function fillTags(tags: Tag[], values: Record<string, string>): Tag[] {
+  let result = tags;
+  for (const [name, rawValue] of Object.entries(values)) {
+    const value = rawValue.trim();
+    if (!value) continue;
+    result = result.some((tag) => tag.name === name)
+      ? result.map((tag) => (tag.name === name ? { ...tag, value } : tag))
+      : [...result, { id: newId(), name, value }];
+  }
+  return result;
 }
 
 export function addItem(shelf: Shelf, title: string, coverUri: string | null = null): ShelfAction {

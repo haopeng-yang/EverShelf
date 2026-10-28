@@ -16,13 +16,14 @@ import { ReaderSettingsSheet } from '@/components/ReaderSettingsSheet';
 import { useT } from '@/i18n/useT';
 import { readerStyle } from '@/models/readerSettings';
 import { newId } from '@/models/ids';
-import type { Bookmark, Chapter } from '@/models/types';
+import type { Bookmark, BookKind, Chapter } from '@/models/types';
 import { useSettings } from '@/state/SettingsProvider';
 import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfState } from '@/state/ShelfProvider';
 import { readChapterText } from '@/storage/bookFiles';
 import {
   addBookmark,
+  loadBookInfo,
   loadBookmarks,
   loadChapters,
   loadProgress,
@@ -44,11 +45,44 @@ const VIEWABILITY = { itemVisiblePercentThreshold: 1 };
 type ChapterText = { status: 'loading' } | { status: 'missing' } | { status: 'ready'; paragraphs: string[] };
 type LoadedText = { chapterId: string } & ({ status: 'missing' } | { status: 'ready'; paragraphs: string[] });
 
+/** Opens the right reader for the book: the text reader for novels. */
+export default function ReaderScreen() {
+  const { itemId } = useLocalSearchParams<{ itemId: string }>();
+  const db = useSQLiteContext();
+  const t = useT();
+  const styles = useGateStyles();
+  const [kind, setKind] = useState<BookKind | null>(null);
+  useEffect(() => {
+    let current = true;
+    loadBookInfo(db, itemId)
+      .then((info) => current && setKind(info.kind))
+      .catch(() => current && setKind('text'));
+    return () => {
+      current = false;
+    };
+  }, [db, itemId]);
+
+  if (kind === 'text') return <TextReader />;
+  return (
+    <View style={styles.container}>
+      {kind === null ? (
+        <ActivityIndicator />
+      ) : (
+        // The comic reader comes in the next step (ROADMAP-comics.md, Phase 3).
+        <>
+          <Text style={styles.text}>{t('reader.comicSoon')}</Text>
+          <Button title={t('common.close')} onPress={() => router.back()} />
+        </>
+      )}
+    </View>
+  );
+}
+
 /**
  * Reads a book one chapter at a time. Tap the text to show or hide the
  * controls. The position is saved as you scroll and restored next time.
  */
-export default function ReaderScreen() {
+function TextReader() {
   const { itemId } = useLocalSearchParams<{ itemId: string }>();
   const db = useSQLiteContext();
   const state = useShelfState();
@@ -455,4 +489,16 @@ const useStyles = makeStyles(() => ({
   titles: { flex: 1 },
   bookTitle: { fontSize: fontSize.body, fontWeight: '600' },
   barHint: { fontSize: fontSize.small },
+}));
+
+const useGateStyles = makeStyles((c) => ({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.lg,
+    padding: spacing.xl,
+    backgroundColor: c.background,
+  },
+  text: { fontSize: fontSize.body, color: c.textMuted, textAlign: 'center' },
 }));
