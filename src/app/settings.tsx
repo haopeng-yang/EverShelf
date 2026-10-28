@@ -1,7 +1,8 @@
 import Constants from 'expo-constants';
 import { Stack } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { confirm, showMessage } from '@/components/dialogs';
@@ -11,8 +12,7 @@ import { BackupError, parseBackup } from '@/models/backup';
 import { useSettings, type LanguageSetting, type ThemeMode } from '@/state/SettingsProvider';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
 import { pickBackupFile } from '@/storage/backupFiles';
-import { exportBackup, restoreBackupCovers } from '@/storage/backupFlow';
-import { pruneBooks } from '@/storage/bookFiles';
+import { exportBackup, restoreBackupBooks, restoreBackupCovers } from '@/storage/backupFlow';
 import { pruneCovers } from '@/storage/covers';
 import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
@@ -23,6 +23,8 @@ export default function SettingsScreen() {
   const styles = useStyles();
   const t = useT();
   const [busy, setBusy] = useState<'export' | 'import' | null>(null);
+  const [includeBooks, setIncludeBooks] = useState(true);
+  const db = useSQLiteContext();
 
   const themeOptions: { value: ThemeMode; label: string }[] = [
     { value: 'system', label: t('settings.system') },
@@ -39,7 +41,7 @@ export default function SettingsScreen() {
   async function handleExport() {
     setBusy('export');
     try {
-      await exportBackup(state);
+      await exportBackup(db, state, includeBooks);
     } catch (error) {
       console.error('Export failed', error);
       showMessage(errorText(error, t), t('settings.exportFailed'));
@@ -54,26 +56,29 @@ export default function SettingsScreen() {
       const text = await pickBackupFile();
       if (text === null) return;
       const backup = parseBackup(text);
+      const message = t('settings.replaceMessage', {
+        backupShelves: backup.state.shelves.length,
+        backupItems: backup.state.items.length,
+        shelves: state.shelves.length,
+        items: state.items.length,
+      });
+      const booksNote =
+        backup.books.length > 0 ? t('settings.replaceBooks', { count: backup.books.length }) : t('settings.replaceNoBooks');
       const ok = await confirm(
         t('settings.replaceTitle'),
-        t('settings.replaceMessage', {
-          backupShelves: backup.state.shelves.length,
-          backupItems: backup.state.items.length,
-          shelves: state.shelves.length,
-          items: state.items.length,
-        }),
+        `${message}\n\n${booksNote}`,
         t('settings.replace'),
         t('common.cancel'),
       );
       if (!ok) return;
       const restored = await restoreBackupCovers(backup);
-      dispatch({ type: 'state/replace', state: restored });
+      // Books belong to items, so the items must be saved before the books go in.
+      if (!(await dispatch({ type: 'state/replace', state: restored }))) throw new Error('Could not save the backup');
       pruneCovers(restored);
-      // Replacing the shelves deletes every chapter row, and backups don't hold
-      // books yet, so no book folder is still in use.
-      pruneBooks(new Set());
+      const books = await restoreBackupBooks(db, backup);
       showMessage(
-        t('settings.restored', { shelves: restored.shelves.length, items: restored.items.length }),
+        t('settings.restored', { shelves: restored.shelves.length, items: restored.items.length }) +
+          (books > 0 ? `\n${t('settings.restoredBooks', { count: books })}` : ''),
         t('settings.restoredTitle'),
       );
     } catch (error) {
@@ -102,6 +107,16 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.label}>{t('settings.backup')}</Text>
+        {/* Books can only be imported on a phone, so the web version has none to include. */}
+        {Platform.OS !== 'web' && (
+          <View style={styles.switchRow}>
+            <View style={styles.switchText}>
+              <Text style={styles.switchLabel}>{t('settings.includeBooks')}</Text>
+              <Text style={styles.hint}>{t('settings.includeBooksHint')}</Text>
+            </View>
+            <Switch value={includeBooks} onValueChange={setIncludeBooks} disabled={busy !== null} />
+          </View>
+        )}
         <Button
           title={busy === 'export' ? t('settings.exporting') : t('settings.export')}
           disabled={busy !== null}
@@ -113,6 +128,11 @@ export default function SettingsScreen() {
           onPress={handleImport}
         />
         <Text style={styles.hint}>{t('settings.backupHint')}</Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.label}>{t('settings.about')}</Text>
+        <Text style={styles.hint}>{t('settings.aboutFiles')}</Text>
       </View>
 
       <Text style={styles.footer}>
@@ -169,4 +189,7 @@ const useStyles = makeStyles((c) => ({
   segmentLabel: { fontSize: fontSize.body, color: c.textMuted },
   segmentLabelSelected: { color: c.text, fontWeight: '600' },
   footer: { fontSize: fontSize.small, color: c.textMuted, textAlign: 'center' },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  switchText: { flex: 1, gap: 2 },
+  switchLabel: { fontSize: fontSize.body, color: c.text },
 }));

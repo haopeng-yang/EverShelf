@@ -43,6 +43,7 @@ import {
   insertBookmarkStatement,
   insertState,
   replaceChapters,
+  restoreBookStatements,
   saveProgressStatement,
   statementsForAction,
   type Statement,
@@ -282,5 +283,37 @@ describe('Book storage', () => {
 
     run(db, replaceChapters(itemId, chapters(itemId, ['New'])));
     expect(bookmarks()).toEqual([]);
+  });
+
+  it('restores a book from a backup: chapters, progress, finished and bookmarks', () => {
+    const { db, itemId } = withBook();
+    run(
+      db,
+      restoreBookStatements(
+        {
+          itemId,
+          chapters: [
+            { id: 'r1', title: 'One', text: 'Alpha.\nBeta.' },
+            { id: 'r2', title: 'Two', text: 'Gamma.' },
+          ],
+          progress: { chapterId: 'r2', paragraph: 0, percent: 0.7, updatedAt: 5, finishedAt: 8 },
+          bookmarks: [{ id: 'bm', chapterId: 'r1', paragraph: 1, excerpt: 'Beta.', createdAt: 3 }],
+        },
+        (position) => `${position}.txt`,
+      ),
+    );
+    expect(loadChapters(db, itemId).map((c) => [c.id, c.position, c.fileName, c.charCount])).toEqual([
+      ['r1', 0, '0.txt', 12],
+      ['r2', 1, '1.txt', 6],
+    ]);
+    expect(loadProgress(db, itemId)).toEqual({
+      itemId,
+      chapterId: 'r2',
+      paragraph: 0,
+      percent: 0.7,
+      updatedAt: 5,
+      finishedAt: 8,
+    });
+    expect(db.prepare(SELECT_BOOKMARKS).all(itemId)).toHaveLength(1);
   });
 });

@@ -1,13 +1,23 @@
 import { translate } from '../i18n';
-import type { Id, Item, Shelf, ShelfState, Tag } from './types';
+import type { Bookmark, Id, Item, ReadingProgress, Shelf, ShelfState, Tag } from './types';
 
 // A backup is one JSON file holding every shelf and item. Covers are embedded
 // as data URIs ("data:image/jpeg;base64,...") so the file works on another phone.
+// Since version 2 it can also hold imported books: chapter text, reading
+// position and bookmarks. Version 1 files (no books) still restore.
 
-export const BACKUP_FORMAT_VERSION = 1;
+export const BACKUP_FORMAT_VERSION = 2;
 
 interface BackupItem extends Omit<Item, 'coverUri'> {
   cover: string | null;
+}
+
+/** One imported book. Chapters are in reading order; `text` is one paragraph per line. */
+export interface BackupBook {
+  itemId: Id;
+  chapters: { id: Id; title: string; text: string }[];
+  progress: Omit<ReadingProgress, 'itemId'> | null;
+  bookmarks: Omit<Bookmark, 'itemId'>[];
 }
 
 export interface BackupFile {
@@ -16,6 +26,8 @@ export interface BackupFile {
   exportedAt: string;
   shelves: Shelf[];
   items: BackupItem[];
+  /** Missing in version 1 files, and when exported without books. */
+  books?: BackupBook[];
 }
 
 export interface ParsedBackup {
@@ -23,6 +35,7 @@ export interface ParsedBackup {
   state: ShelfState;
   /** Item id -> cover as a data URI. */
   covers: Map<Id, string>;
+  books: BackupBook[];
 }
 
 export type BackupErrorCode =
@@ -35,7 +48,8 @@ export type BackupErrorCode =
   | 'badItem'
   | 'itemShelfMissing'
   | 'duplicateItem'
-  | 'badTag';
+  | 'badTag'
+  | 'badBook';
 
 /** A problem with a backup file. `code` + `params` let screens show it in any language; `message` is English. */
 export class BackupError extends Error {
@@ -47,14 +61,23 @@ export class BackupError extends Error {
   }
 }
 
-/** `covers` maps item id -> cover data URI, for items that have one. */
-export function createBackup(state: ShelfState, covers: Map<Id, string>, exportedAt: Date): BackupFile {
+/**
+ * `covers` maps item id -> cover data URI, for items that have one.
+ * `books` is left out of the file when null (a "shelf data only" backup).
+ */
+export function createBackup(
+  state: ShelfState,
+  covers: Map<Id, string>,
+  exportedAt: Date,
+  books: BackupBook[] | null = null,
+): BackupFile {
   return {
     app: 'EverShelf',
     version: BACKUP_FORMAT_VERSION,
     exportedAt: exportedAt.toISOString(),
     shelves: state.shelves,
     items: state.items.map(({ coverUri: _coverUri, ...item }) => ({ ...item, cover: covers.get(item.id) ?? null })),
+    ...(books ? { books } : {}),
   };
 }
 
@@ -102,7 +125,60 @@ export function parseBackup(text: string): ParsedBackup {
     };
   });
 
-  return { state: { shelves, items }, covers };
+  if (data.books !== undefined && !Array.isArray(data.books)) throw new BackupError('badBook', { n: 1 });
+  const books = (data.books ?? []).map((raw, i) => parseBook(raw, i + 1, itemIds));
+  if (new Set(books.map((b) => b.itemId)).size !== books.length) throw new BackupError('badBook', { n: books.length });
+
+  return { state: { shelves, items }, covers, books };
+}
+
+/**
+ * Chapters must be complete, since they are the book. A reading position or
+ * bookmark that doesn't fit is just dropped: losing it is better than
+ * refusing the whole backup.
+ */
+function parseBook(raw: unknown, n: number, itemIds: Set<Id>): BackupBook {
+  if (!isObject(raw) || typeof raw.itemId !== 'string' || !itemIds.has(raw.itemId) || !Array.isArray(raw.chapters)) {
+    throw new BackupError('badBook', { n });
+  }
+  const chapters = raw.chapters.map((c) => {
+    if (!isObject(c) || typeof c.id !== 'string' || typeof c.title !== 'string' || typeof c.text !== 'string') {
+      throw new BackupError('badBook', { n });
+    }
+    return { id: c.id, title: c.title, text: c.text };
+  });
+  const chapterIds = new Set(chapters.map((c) => c.id));
+  if (chapters.length === 0 || chapterIds.size !== chapters.length) throw new BackupError('badBook', { n });
+
+  const p = raw.progress;
+  const progress =
+    isObject(p) &&
+    typeof p.chapterId === 'string' &&
+    chapterIds.has(p.chapterId) &&
+    typeof p.paragraph === 'number' &&
+    typeof p.updatedAt === 'number'
+      ? {
+          chapterId: p.chapterId,
+          paragraph: Math.max(0, Math.floor(p.paragraph)),
+          percent: typeof p.percent === 'number' ? Math.min(1, Math.max(0, p.percent)) : 0,
+          updatedAt: p.updatedAt,
+          finishedAt: typeof p.finishedAt === 'number' ? p.finishedAt : null,
+        }
+      : null;
+
+  const bookmarks = (Array.isArray(raw.bookmarks) ? raw.bookmarks : []).flatMap((b) =>
+    isObject(b) &&
+    typeof b.id === 'string' &&
+    typeof b.chapterId === 'string' &&
+    chapterIds.has(b.chapterId) &&
+    typeof b.paragraph === 'number' &&
+    typeof b.excerpt === 'string' &&
+    typeof b.createdAt === 'number'
+      ? [{ id: b.id, chapterId: b.chapterId, paragraph: Math.max(0, Math.floor(b.paragraph)), excerpt: b.excerpt, createdAt: b.createdAt }]
+      : [],
+  );
+
+  return { itemId: raw.itemId, chapters, progress, bookmarks };
 }
 
 function parseShelf(raw: unknown, n: number): Shelf {

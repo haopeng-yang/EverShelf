@@ -136,7 +136,7 @@ export const en = {
   'settings.import': 'Import backup',
   'settings.importing': 'Importing…',
   'settings.backupHint':
-    'Export saves all shelves, items, tags and covers into one file you can keep in Files, Drive or email. Import replaces everything with a backup file.',
+    'Export saves all shelves, items, tags and covers (and books, if included) into one file you can keep in Files, Drive or email. Import replaces everything with a backup file.',
   'settings.summary': '{shelves} shelves · {items} items',
   'settings.exportFailed': 'Could not export',
   'settings.importFailed': 'Could not import',
@@ -146,6 +146,16 @@ export const en = {
   'settings.replace': 'Replace',
   'settings.restoredTitle': 'Backup restored',
   'settings.restored': 'Restored {shelves} shelves and {items} items.',
+  'settings.restoredBooks': 'Restored {count} books with their reading progress and bookmarks.',
+  'settings.restoredBooks_one': 'Restored 1 book with its reading progress and bookmarks.',
+  'settings.replaceBooks': 'This backup includes {count} books, which will replace your current books.',
+  'settings.replaceBooks_one': 'This backup includes 1 book, which will replace your current books.',
+  'settings.replaceNoBooks': 'This backup has no book text, so your imported books will be removed.',
+  'settings.includeBooks': 'Include books',
+  'settings.includeBooksHint': 'Saves imported books’ text, reading progress and bookmarks. The file can be large.',
+  'settings.about': 'About',
+  'settings.aboutFiles':
+    'EverShelf only opens files you choose from your device. It does not download books from the internet. Please only import books you have the right to read.',
 
   // Backup file problems
   'backupError.notJson': 'This file is not an EverShelf backup (it is not valid JSON).',
@@ -242,6 +252,7 @@ export const en = {
   'backupError.itemShelfMissing': 'This backup is damaged: the shelf of item {n} is missing.',
   'backupError.duplicateItem': 'This backup is damaged: item {n} has a duplicate id.',
   'backupError.badTag': 'This backup is damaged: a tag on item {n} is not readable.',
+  'backupError.badBook': 'This backup is damaged: book {n} is not readable.',
 };
 
 export type TranslationKey = keyof typeof en;

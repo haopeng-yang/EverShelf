@@ -126,7 +126,7 @@ export const zh: Translations = {
   'settings.import': '导入备份',
   'settings.importing': '正在导入…',
   'settings.backupHint':
-    '导出会把所有书架、项目、标签和封面保存成一个文件，可存到文件、云盘或邮件中。导入会用备份文件替换全部内容。',
+    '导出会把所有书架、项目、标签和封面（如选择，还包括书籍）保存成一个文件，可存到文件、云盘或邮件中。导入会用备份文件替换全部内容。',
   'settings.summary': '{shelves} 个书架 · {items} 个项目',
   'settings.exportFailed': '导出失败',
   'settings.importFailed': '导入失败',
@@ -136,6 +136,13 @@ export const zh: Translations = {
   'settings.replace': '替换',
   'settings.restoredTitle': '备份已恢复',
   'settings.restored': '已恢复 {shelves} 个书架和 {items} 个项目。',
+  'settings.restoredBooks': '已恢复 {count} 本书及其阅读进度和书签。',
+  'settings.replaceBooks': '此备份包含 {count} 本书，将替换你现有的书。',
+  'settings.replaceNoBooks': '此备份不包含书籍文字，你导入的书将被删除。',
+  'settings.includeBooks': '包含书籍',
+  'settings.includeBooksHint': '保存导入书籍的文字、阅读进度和书签。文件可能较大。',
+  'settings.about': '关于',
+  'settings.aboutFiles': 'EverShelf 只打开你从设备中选择的文件，不会从网上下载书籍。请只导入你有权阅读的书。',
 
   'backupError.notJson': '此文件不是 EverShelf 备份（不是有效的 JSON）。',
   'backupError.notBackup': '此文件不是 EverShelf 备份。',
@@ -223,4 +230,5 @@ export const zh: Translations = {
   'readerSettings.keepAwake': '阅读时保持屏幕常亮',
   'reader.missingText': '这一章的文字丢失了，请尝试重新导入这本书。',
   'backupError.badTag': '此备份已损坏：第 {n} 个项目的某个标签无法读取。',
+  'backupError.badBook': '此备份已损坏：第 {n} 本书无法读取。',
 };

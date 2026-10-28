@@ -1,4 +1,4 @@
-import { decodeText } from '../src/books/decodeText';
+import { decodeGbkFast, decodeText } from '../src/books/decodeText';
 import { CHAPTER_LENGTH, isChapterHeading, parseTxt, titleFromFileName, unwrapParagraphs } from '../src/books/parseTxt';
 
 describe('decodeText', () => {
@@ -128,5 +128,23 @@ describe('parseTxt', () => {
     const withHeadings = 'Chapter 1\nOne.\nChapter 2\nTwo.';
     expect(parseTxt(withHeadings, 'a.txt', 'length').rule).toBe('length');
     expect(parseTxt(withHeadings, 'a.txt', 'length').headingCount).toBe(2);
+  });
+});
+
+describe('decodeGbkFast', () => {
+  it('matches the full decoder on every two-byte GBK character', () => {
+    const bytes: number[] = [0x41, 0x80];
+    for (let lead = 0x81; lead <= 0xfe; lead++) {
+      for (let trail = 0x40; trail <= 0xfe; trail++) if (trail !== 0x7f) bytes.push(lead, trail);
+    }
+    const all = new Uint8Array(bytes);
+    const expected = new TextDecoder('gb18030').decode(all);
+    expect(decodeGbkFast(all)).toBe(expected);
+  });
+
+  it('gives up on four-byte GB18030 and invalid bytes, so the full decoder is used', () => {
+    expect(decodeGbkFast(new Uint8Array([0x81, 0x30, 0x81, 0x30]))).toBeNull();
+    expect(decodeGbkFast(new Uint8Array([0xb5]))).toBeNull();
+    expect(decodeGbkFast(new Uint8Array([0xff, 0x41]))).toBeNull();
   });
 });

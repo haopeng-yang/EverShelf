@@ -1,3 +1,4 @@
+import type { BackupBook } from '../models/backup';
 import type { ShelfAction } from '../models/shelfReducer';
 import type { Bookmark, Chapter, Id, Item, ReadingProgress, Shelf, ShelfState } from '../models/types';
 import { chapterToRow, itemToRow, shelfToRow, tagToRow } from './rows';
@@ -178,4 +179,30 @@ export function finishedStatements(itemId: Id, finished: boolean, lastChapterId:
     },
     { sql: SET_FINISHED, params: [now, itemId] },
   ];
+}
+
+/**
+ * Saves one book from a backup: its chapters (files are written separately),
+ * reading position, finished state and bookmarks. `fileName` gives each
+ * chapter's file name from its position.
+ */
+export function restoreBookStatements(book: BackupBook, fileName: (position: number) => string): Statement[] {
+  const chapters: Chapter[] = book.chapters.map((c, position) => ({
+    id: c.id,
+    itemId: book.itemId,
+    position,
+    title: c.title,
+    fileName: fileName(position),
+    charCount: c.text.length,
+  }));
+  const statements = replaceChapters(book.itemId, chapters);
+  const progress = book.progress;
+  if (progress) {
+    statements.push(saveProgressStatement({ ...progress, itemId: book.itemId }));
+    if (progress.finishedAt !== null) {
+      statements.push(...finishedStatements(book.itemId, true, progress.chapterId, progress.finishedAt));
+    }
+  }
+  for (const bookmark of book.bookmarks) statements.push(insertBookmarkStatement({ ...bookmark, itemId: book.itemId }));
+  return statements;
 }
