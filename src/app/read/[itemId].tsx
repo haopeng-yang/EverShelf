@@ -10,6 +10,7 @@ import { bookPercent } from '@/books/progress';
 import { BookSearchSheet } from '@/components/BookSearchSheet';
 import { Button } from '@/components/Button';
 import { ChapterListSheet } from '@/components/ChapterListSheet';
+import { ComicReader } from '@/components/comic/ComicReader';
 import { LockedScreen } from '@/components/LockedShelf';
 import { NotFound } from '@/components/NotFound';
 import { ReaderSettingsSheet } from '@/components/ReaderSettingsSheet';
@@ -45,12 +46,10 @@ const VIEWABILITY = { itemVisiblePercentThreshold: 1 };
 type ChapterText = { status: 'loading' } | { status: 'missing' } | { status: 'ready'; paragraphs: string[] };
 type LoadedText = { chapterId: string } & ({ status: 'missing' } | { status: 'ready'; paragraphs: string[] });
 
-/** Opens the right reader for the book: the text reader for novels. */
+/** Opens the right reader for the book: the text reader for novels, the comic reader for comics. */
 export default function ReaderScreen() {
   const { itemId } = useLocalSearchParams<{ itemId: string }>();
   const db = useSQLiteContext();
-  const t = useT();
-  const styles = useGateStyles();
   const [kind, setKind] = useState<BookKind | null>(null);
   useEffect(() => {
     let current = true;
@@ -63,17 +62,16 @@ export default function ReaderScreen() {
   }, [db, itemId]);
 
   if (kind === 'text') return <TextReader />;
+  if (kind === 'comic') return <ComicReader itemId={itemId} />;
+  return <Loading />;
+}
+
+function Loading() {
+  const styles = useLoadingStyles();
   return (
     <View style={styles.container}>
-      {kind === null ? (
-        <ActivityIndicator />
-      ) : (
-        // The comic reader comes in the next step (ROADMAP-comics.md, Phase 3).
-        <>
-          <Text style={styles.text}>{t('reader.comicSoon')}</Text>
-          <Button title={t('common.close')} onPress={() => router.back()} />
-        </>
-      )}
+      <Stack.Screen options={{ headerShown: false }} />
+      <ActivityIndicator />
     </View>
   );
 }
@@ -491,14 +489,6 @@ const useStyles = makeStyles(() => ({
   barHint: { fontSize: fontSize.small },
 }));
 
-const useGateStyles = makeStyles((c) => ({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.lg,
-    padding: spacing.xl,
-    backgroundColor: c.background,
-  },
-  text: { fontSize: fontSize.body, color: c.textMuted, textAlign: 'center' },
+const useLoadingStyles = makeStyles((c) => ({
+  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: c.background },
 }));

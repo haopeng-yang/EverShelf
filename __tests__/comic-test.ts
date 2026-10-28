@@ -1,5 +1,6 @@
 import { strToU8, zipSync, type Zippable } from 'fflate';
 
+import { bookPages, chapterStarts, comicPercent, pageRatio, startPage, stripOffsets } from '../src/books/comic/comicProgress';
 import {
   chapterTitle,
   guessReadingMode,
@@ -11,6 +12,7 @@ import {
   seriesTitle,
 } from '../src/books/comic/parseComic';
 import { isZip, memorySource, readZipEntries, readZipEntry, ZipError } from '../src/books/comic/zip';
+import type { Chapter, Page } from '../src/models/types';
 
 const bytes = (...values: number[]) => new Uint8Array(values);
 const be32 = (n: number) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
@@ -206,5 +208,53 @@ describe('ComicInfo and reading mode', () => {
     expect(guessReadingMode({ rightToLeft: false, shelfId: 'manga', sizes: [page, null] })).toBe('rtl');
     expect(guessReadingMode({ rightToLeft: false, shelfId: 'books', sizes: [page] })).toBe('ltr');
     expect(guessReadingMode({ rightToLeft: false, shelfId: 'books', sizes: [] })).toBe('ltr');
+  });
+});
+
+describe('comic reader positions', () => {
+  const chapters: Chapter[] = [0, 1, 2].map((position) => ({
+    id: `c${position}`,
+    itemId: 'i',
+    position,
+    title: `Chapter ${position + 1}`,
+    fileName: String(position),
+    charCount: position === 1 ? 0 : 3,
+  }));
+  // Chapter 2 (c1) has no pages; a page of a chapter that no longer exists is dropped.
+  const pages: Page[] = [
+    ...['c0', 'c2'].flatMap((chapterId) =>
+      [0, 1, 2].map((position) => ({ chapterId, position, fileName: `${chapterId}/${position}.png`, width: 800, height: 1200 })),
+    ),
+    { chapterId: 'gone', position: 0, fileName: 'x', width: 1, height: 1 },
+  ];
+  const book = bookPages(chapters, pages);
+
+  it('numbers every page through the book', () => {
+    expect(book.map((p) => [p.chapterIndex, p.position, p.index])).toEqual([
+      [0, 0, 0],
+      [0, 1, 1],
+      [0, 2, 2],
+      [2, 0, 3],
+      [2, 1, 4],
+      [2, 2, 5],
+    ]);
+    expect(chapterStarts(3, book)).toEqual([0, -1, 3]);
+  });
+
+  it('opens at the saved page, clamped, or at the start', () => {
+    expect(startPage(book, null)).toBe(0);
+    expect(startPage(book, { chapterId: 'c2', paragraph: 1 })).toBe(4);
+    expect(startPage(book, { chapterId: 'c2', paragraph: 99 })).toBe(5);
+    expect(startPage(book, { chapterId: 'c1', paragraph: 0 })).toBe(0);
+  });
+
+  it('counts the last page as finished reading, and lays strips out by shape', () => {
+    expect(comicPercent(0, 6)).toBeCloseTo(1 / 6);
+    expect(comicPercent(5, 6)).toBe(1);
+    expect(comicPercent(0, 0)).toBe(0);
+    expect(stripOffsets([{ width: 800, height: 1200 }, { width: 0, height: 0 }, { width: 400, height: 4000 }], 400)).toEqual([
+      0, 600, 1200, 5200,
+    ]);
+    expect(pageRatio({ width: 0, height: 10 })).toBe(1.5);
   });
 });
