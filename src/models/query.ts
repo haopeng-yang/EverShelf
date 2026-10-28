@@ -1,9 +1,9 @@
-import type { Item } from './types';
+import type { Id, Item } from './types';
 
-export type SortOrder = 'newest' | 'oldest' | 'titleAsc' | 'titleDesc' | 'updated';
+export type SortOrder = 'newest' | 'oldest' | 'titleAsc' | 'titleDesc' | 'updated' | 'lastRead';
 
 /** Labels live in the translation files as sort.<order> and sortShort.<order>. */
-export const SORT_ORDERS: SortOrder[] = ['newest', 'oldest', 'titleAsc', 'titleDesc', 'updated'];
+export const SORT_ORDERS: SortOrder[] = ['newest', 'oldest', 'titleAsc', 'titleDesc', 'updated', 'lastRead'];
 
 /**
  * Search items. Two forms:
@@ -34,8 +34,12 @@ export function filterItems(items: Item[], query: string): Item[] {
   });
 }
 
-/** Returns a sorted copy. Ties keep the order items were added in. */
-export function sortItems(items: Item[], order: SortOrder): Item[] {
+/**
+ * Returns a sorted copy. Ties keep the order items were added in.
+ * 'lastRead' uses `lastReadAt` (item id → time); items never read go last.
+ */
+export function sortItems(items: Item[], order: SortOrder, lastReadAt: Map<Id, number | null> = new Map()): Item[] {
+  const lastRead = (item: Item) => lastReadAt.get(item.id) ?? -Infinity;
   const byTitle = (a: Item, b: Item) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true });
   const compare: Record<SortOrder, (a: Item, b: Item) => number> = {
     newest: (a, b) => b.createdAt - a.createdAt,
@@ -43,6 +47,8 @@ export function sortItems(items: Item[], order: SortOrder): Item[] {
     titleAsc: byTitle,
     titleDesc: (a, b) => byTitle(b, a),
     updated: (a, b) => b.updatedAt - a.updatedAt,
+    // Comparing first avoids Infinity − Infinity (NaN) when neither was read.
+    lastRead: (a, b) => (lastRead(a) === lastRead(b) ? 0 : lastRead(b) > lastRead(a) ? 1 : -1),
   };
   return items
     .map((item, index) => ({ item, index }))

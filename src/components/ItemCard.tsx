@@ -1,18 +1,21 @@
-import { Pressable, Text } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import type { Item } from '@/models/types';
+import type { BookSummary, Item } from '@/models/types';
 import { fontSize, makeStyles, spacing } from '@/theme';
 
 import { Cover } from './Cover';
+import { ProgressBadge } from './ProgressBadge';
 
 interface ItemCardProps {
   item: Item;
   width: number;
+  /** Reading progress, if the item is an imported book. */
+  book?: BookSummary;
   onPress: () => void;
 }
 
 /** One item in the shelf grid: cover with the title underneath. */
-export function ItemCard({ item, width, onPress }: ItemCardProps) {
+export function ItemCard({ item, width, book, onPress }: ItemCardProps) {
   const styles = useStyles();
   return (
     <Pressable
@@ -20,7 +23,10 @@ export function ItemCard({ item, width, onPress }: ItemCardProps) {
       accessibilityLabel={item.title}
       onPress={onPress}
       style={({ pressed }) => [{ width }, pressed && styles.pressed]}>
-      <Cover uri={item.coverUri} title={item.title} />
+      <View>
+        <Cover uri={item.coverUri} title={item.title} />
+        <ProgressBadge book={book} />
+      </View>
       <Text style={styles.title} numberOfLines={2}>
         {item.title}
       </Text>

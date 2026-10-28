@@ -3,6 +3,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
+import { percentLabel } from '@/books/progress';
 import { Button } from '@/components/Button';
 import { Cover } from '@/components/Cover';
 import { NotFound } from '@/components/NotFound';
@@ -21,10 +22,12 @@ export default function ItemScreen() {
   const t = useT();
   const { width } = useWindowDimensions();
   const db = useSQLiteContext();
-  const [book, setBook] = useState<{ chapterCount: number; continueAt: string | null }>({
-    chapterCount: 0,
-    continueAt: null,
-  });
+  const [book, setBook] = useState<{
+    chapterCount: number;
+    continueAt: string | null;
+    /** "42% read" or "Finished"; null if never opened. */
+    status: string | null;
+  }>({ chapterCount: 0, continueAt: null, status: null });
   // Reload whenever the screen comes back into view, e.g. after reading.
   useFocusEffect(
     useCallback(() => {
@@ -33,13 +36,18 @@ export default function ItemScreen() {
         .then(([chapters, progress]) => {
           if (!current) return;
           const at = progress && chapters.find((c) => c.id === progress.chapterId);
-          setBook({ chapterCount: chapters.length, continueAt: at ? at.title : null });
+          const status = !progress
+            ? null
+            : progress.finishedAt !== null
+              ? t('book.finished')
+              : t('book.percentRead', { percent: percentLabel(progress.percent) });
+          setBook({ chapterCount: chapters.length, continueAt: at ? at.title : null, status });
         })
         .catch((error: unknown) => console.warn('Could not load chapters', error));
       return () => {
         current = false;
       };
-    }, [db, id]),
+    }, [db, id, t]),
   );
   const item = state.items.find((i) => i.id === id);
   if (!item) return <NotFound what="item" />;
@@ -63,7 +71,9 @@ export default function ItemScreen() {
             <Field key={tag.id} name={tag.name} value={tag.value} />
           ))}
           {book.chapterCount > 0 && (
-            <Text style={styles.chapters}>{t('item.chapters', { count: book.chapterCount })}</Text>
+            <Text style={styles.chapters}>
+              {[t('item.chapters', { count: book.chapterCount }), book.status].filter(Boolean).join(' · ')}
+            </Text>
           )}
         </View>
       </View>

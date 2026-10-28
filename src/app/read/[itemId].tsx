@@ -6,20 +6,34 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Platform, Text, View, type ListViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { bookPercent } from '@/books/progress';
+import { BookSearchSheet } from '@/components/BookSearchSheet';
 import { Button } from '@/components/Button';
 import { ChapterListSheet } from '@/components/ChapterListSheet';
 import { NotFound } from '@/components/NotFound';
 import { ReaderSettingsSheet } from '@/components/ReaderSettingsSheet';
 import { useT } from '@/i18n/useT';
 import { readerStyle } from '@/models/readerSettings';
-import type { Chapter } from '@/models/types';
+import { newId } from '@/models/ids';
+import type { Bookmark, Chapter } from '@/models/types';
 import { useSettings } from '@/state/SettingsProvider';
 import { useShelfState } from '@/state/ShelfProvider';
 import { readChapterText } from '@/storage/bookFiles';
-import { loadChapters, loadProgress, saveProgress } from '@/storage/database';
+import {
+  addBookmark,
+  loadBookmarks,
+  loadChapters,
+  loadProgress,
+  removeBookmark,
+  saveProgress,
+  setBookFinished,
+} from '@/storage/database';
 import { fontSize, makeStyles, spacing, useTheme } from '@/theme';
 
 const KEEP_AWAKE_TAG = 'reader';
+const TOAST_MS = 1500;
+/** Characters of a paragraph kept with its bookmark, for the bookmark list. */
+const BOOKMARK_EXCERPT = 80;
 
 /** Wait this long after scrolling stops before saving the reading position. */
 const SAVE_DELAY_MS = 1000;
@@ -47,6 +61,12 @@ export default function ReaderScreen() {
   const [controlsVisible, setControlsVisible] = useState(false);
   const [contentsOpen, setContentsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [finished, setFinished] = useState(false);
+  /** A short message shown over the text, e.g. "Bookmark added". */
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { settings } = useSettings();
   const look = readerStyle(settings, useTheme().dark, Platform.OS);
   const chapter = chapters?.[index];
@@ -64,8 +84,11 @@ export default function ReaderScreen() {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = null;
     const p = position.current;
-    if (!p) return;
-    saveProgress(db, { itemId, chapterId: p.chapterId, paragraph: p.paragraph, updatedAt: Date.now() }).catch(
+    if (!p || !chapters) return;
+    const chapterIndex = chapters.findIndex((c) => c.id === p.chapterId);
+    const paragraphs = loaded?.chapterId === p.chapterId && loaded.status === 'ready' ? loaded.paragraphs : null;
+    const percent = bookPercent(chapters, chapterIndex, paragraphs, p.paragraph);
+    saveProgress(db, { itemId, chapterId: p.chapterId, paragraph: p.paragraph, percent, updatedAt: Date.now() }).catch(
       (error: unknown) => console.warn('Could not save reading position', error),
     );
   }
@@ -89,13 +112,15 @@ export default function ReaderScreen() {
   // Load the chapter list and where the reader left off.
   useEffect(() => {
     let current = true;
-    Promise.all([loadChapters(db, itemId), loadProgress(db, itemId)])
-      .then(([loaded, progress]) => {
+    Promise.all([loadChapters(db, itemId), loadProgress(db, itemId), loadBookmarks(db, itemId)])
+      .then(([loaded, progress, savedBookmarks]) => {
         if (!current) return;
         const saved = progress ? loaded.findIndex((c) => c.id === progress.chapterId) : -1;
         restoreTo.current = saved >= 0 && progress ? progress.paragraph : 0;
         setIndex(Math.max(saved, 0));
         setChapters(loaded);
+        setBookmarks(savedBookmarks);
+        setFinished(progress?.finishedAt != null);
       })
       .catch((error: unknown) => {
         console.warn('Could not load book', error);
@@ -161,13 +186,56 @@ export default function ReaderScreen() {
 
   if (!item) return <NotFound what="item" />;
 
-  const goTo = (next: number) => {
+  /** Opens a chapter, at its start or at a given paragraph (from a bookmark or search result). */
+  const goTo = (next: number, paragraph = 0) => {
     if (!chapters || next < 0 || next >= chapters.length) return;
+    if (next === index) {
+      if (text.status === 'ready') {
+        listRef.current?.scrollToIndex({ index: Math.min(paragraph, text.paragraphs.length - 1), animated: false });
+      }
+      return;
+    }
     savePositionNow();
-    restoreTo.current = 0;
+    restoreTo.current = paragraph;
     setIndex(next);
   };
   const toggleControls = () => setControlsVisible((v) => !v);
+
+  const showToast = (message: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(message);
+    toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
+  };
+
+  /** Long-press a paragraph to bookmark it, or to remove its bookmark. */
+  const toggleBookmark = (paragraph: number, paragraphText: string) => {
+    if (!chapter) return;
+    const existing = bookmarks.find((b) => b.chapterId === chapter.id && b.paragraph === paragraph);
+    if (existing) {
+      setBookmarks((list) => list.filter((b) => b.id !== existing.id));
+      removeBookmark(db, existing.id).catch((error: unknown) => console.warn('Could not remove bookmark', error));
+      showToast(t('reader.bookmarkRemoved'));
+      return;
+    }
+    const bookmark = newBookmark(itemId, chapter.id, paragraph, paragraphText);
+    setBookmarks((list) => [...list, bookmark]);
+    addBookmark(db, bookmark).catch((error: unknown) => console.warn('Could not save bookmark', error));
+    showToast(t('reader.bookmarkAdded'));
+  };
+  const deleteBookmark = (bookmark: Bookmark) => {
+    setBookmarks((list) => list.filter((b) => b.id !== bookmark.id));
+    removeBookmark(db, bookmark.id).catch((error: unknown) => console.warn('Could not remove bookmark', error));
+  };
+  const bookmarkedHere = new Set(bookmarks.filter((b) => b.chapterId === chapter?.id).map((b) => b.paragraph));
+
+  const toggleFinished = () => {
+    if (!chapters || chapters.length === 0) return;
+    const next = !finished;
+    setFinished(next);
+    setBookFinished(db, itemId, next, chapters[chapters.length - 1].id).catch((error: unknown) =>
+      console.warn('Could not mark book finished', error),
+    );
+  };
   const hasPrevious = index > 0;
   const hasNext = chapters !== null && index < chapters.length - 1;
   const { palette } = look;
@@ -222,8 +290,15 @@ export default function ReaderScreen() {
               <Text style={[styles.message, mutedStyle]}>{t('reader.missingText')}</Text>
             ) : undefined
           }
-          renderItem={({ item: paragraph }) => (
-            <Text style={[styles.paragraph, textStyle]} onPress={toggleControls}>
+          renderItem={({ item: paragraph, index: paragraphIndex }) => (
+            <Text
+              style={[
+                styles.paragraph,
+                textStyle,
+                bookmarkedHere.has(paragraphIndex) && [styles.bookmarked, { borderColor: palette.textMuted }],
+              ]}
+              onPress={toggleControls}
+              onLongPress={() => toggleBookmark(paragraphIndex, paragraph)}>
               {paragraph}
             </Text>
           )}
@@ -232,7 +307,16 @@ export default function ReaderScreen() {
               {hasNext ? (
                 <Button title={t('reader.nextChapter')} variant="primary" onPress={() => goTo(index + 1)} />
               ) : (
-                <Text style={[styles.message, mutedStyle]}>{t('reader.endOfBook')}</Text>
+                <>
+                  <Text style={[styles.message, mutedStyle]}>
+                    {finished ? t('reader.finishedBook') : t('reader.endOfBook')}
+                  </Text>
+                  <Button
+                    title={finished ? t('reader.markUnfinished') : t('reader.markFinished')}
+                    variant={finished ? 'secondary' : 'primary'}
+                    onPress={toggleFinished}
+                  />
+                </>
               )}
             </View>
           }
@@ -251,6 +335,13 @@ export default function ReaderScreen() {
                 {chapter.title}
               </Text>
             </View>
+            <Button
+              title="🔍"
+              variant="text"
+              compact
+              accessibilityLabel={t('search.title')}
+              onPress={() => setSearchOpen(true)}
+            />
             <Button
               title="Aa"
               variant="text"
@@ -279,20 +370,51 @@ export default function ReaderScreen() {
       )}
 
       {chapters && (
-        <ChapterListSheet
-          visible={contentsOpen}
-          chapters={chapters}
-          currentIndex={index}
-          onSelect={(next) => {
-            setControlsVisible(false);
-            goTo(next);
-          }}
-          onClose={() => setContentsOpen(false)}
-        />
+        <>
+          <ChapterListSheet
+            visible={contentsOpen}
+            chapters={chapters}
+            currentIndex={index}
+            bookmarks={bookmarks}
+            onSelect={(next, paragraph) => {
+              setControlsVisible(false);
+              goTo(next, paragraph);
+            }}
+            onDeleteBookmark={deleteBookmark}
+            onClose={() => setContentsOpen(false)}
+          />
+          <BookSearchSheet
+            visible={searchOpen}
+            itemId={itemId}
+            chapters={chapters}
+            onSelect={(next, paragraph) => {
+              setControlsVisible(false);
+              goTo(next, paragraph);
+            }}
+            onClose={() => setSearchOpen(false)}
+          />
+        </>
       )}
       <ReaderSettingsSheet visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
+
+      {toast && (
+        <View pointerEvents="none" style={[styles.toast, { bottom: insets.bottom + spacing.xl * 3 }]}>
+          <Text style={styles.toastText}>{toast}</Text>
+        </View>
+      )}
     </View>
   );
+}
+
+function newBookmark(itemId: string, chapterId: string, paragraph: number, paragraphText: string): Bookmark {
+  return {
+    id: newId(),
+    itemId,
+    chapterId,
+    paragraph,
+    excerpt: paragraphText.slice(0, BOOKMARK_EXCERPT),
+    createdAt: Date.now(),
+  };
 }
 
 // Colours, text size and margins come from the reader settings (see `look`);
@@ -303,7 +425,17 @@ const useStyles = makeStyles(() => ({
   message: { fontSize: fontSize.body, textAlign: 'center' },
   chapterTitle: { fontSize: fontSize.heading, fontWeight: '700', marginBottom: spacing.xl },
   paragraph: { marginBottom: spacing.md },
-  endOfChapter: { alignItems: 'center', paddingVertical: spacing.xl * 2 },
+  bookmarked: { borderLeftWidth: 3, paddingLeft: spacing.sm, marginLeft: -spacing.sm - 3 },
+  endOfChapter: { alignItems: 'center', gap: spacing.lg, paddingVertical: spacing.xl * 2 },
+  toast: {
+    position: 'absolute',
+    alignSelf: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+  },
+  toastText: { color: '#FFFFFF', fontSize: fontSize.small },
   bar: {
     position: 'absolute',
     left: 0,

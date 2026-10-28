@@ -49,4 +49,14 @@ describe('sortItems', () => {
     expect(ids(sortItems(all, 'updated'))).toEqual(['dune', 'hobbit', 'b10', 'b2']);
     expect(ids(all)).toEqual(['dune', 'hobbit', 'b2', 'b10']);
   });
+
+  it('sorts by last read, with unread items last in added order', () => {
+    const lastRead = new Map([
+      ['b2', 5],
+      ['hobbit', 9],
+      ['b10', null],
+    ]);
+    expect(ids(sortItems(all, 'lastRead', lastRead))).toEqual(['hobbit', 'b2', 'dune', 'b10']);
+    expect(ids(sortItems(all, 'lastRead'))).toEqual(['dune', 'hobbit', 'b2', 'b10']);
+  });
 });

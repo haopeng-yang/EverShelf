@@ -51,7 +51,33 @@ export interface ReadingProgress {
    * a pixel offset so it stays right when the font size changes.
    */
   paragraph: number;
+  /** How far through the whole book, 0–1, by characters. */
+  percent: number;
   updatedAt: number;
+  /** When the book was marked finished, or null. Saving a new position leaves it alone. */
+  finishedAt: number | null;
+}
+
+/** A saved place in a book, chosen by long-pressing a paragraph. */
+export interface Bookmark {
+  id: Id;
+  itemId: Id;
+  chapterId: Id;
+  paragraph: number;
+  /** The start of the paragraph, shown in the bookmark list. */
+  excerpt: string;
+  createdAt: number;
+}
+
+/** What the shelf needs to know about a book: size and reading progress. */
+export interface BookSummary {
+  itemId: Id;
+  chapterCount: number;
+  /** 0–1; 0 if the book has never been opened. */
+  percent: number;
+  /** When it was last read, or null if never opened. */
+  lastReadAt: number | null;
+  finished: boolean;
 }
 
 export interface ShelfState {

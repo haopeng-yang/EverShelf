@@ -1,21 +1,24 @@
 import { Pressable, Text, View } from 'react-native';
 
 import { useT } from '@/i18n/useT';
-import type { Item } from '@/models/types';
+import type { BookSummary, Item } from '@/models/types';
 import { fontSize, makeStyles, spacing } from '@/theme';
 
 import { Cover } from './Cover';
+import { ProgressBadge } from './ProgressBadge';
 
 /** How many filled-in tags to show under the title. */
 const SUMMARY_TAGS = 2;
 
 interface ItemRowProps {
   item: Item;
+  /** Reading progress, if the item is an imported book. */
+  book?: BookSummary;
   onPress: () => void;
 }
 
 /** One item in list view: small cover on the left, title and the first few filled-in tags on the right. */
-export function ItemRow({ item, onPress }: ItemRowProps) {
+export function ItemRow({ item, book, onPress }: ItemRowProps) {
   const styles = useStyles();
   const t = useT();
   const summary = item.tags.filter((tag) => tag.value.trim()).slice(0, SUMMARY_TAGS);
@@ -25,7 +28,10 @@ export function ItemRow({ item, onPress }: ItemRowProps) {
       accessibilityLabel={item.title}
       onPress={onPress}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
-      <Cover uri={item.coverUri} title={item.title} style={styles.cover} />
+      <View style={styles.cover}>
+        <Cover uri={item.coverUri} title={item.title} />
+        <ProgressBadge book={book} />
+      </View>
       <View style={styles.text}>
         <Text style={styles.title} numberOfLines={1}>
           {item.title}

@@ -1,9 +1,11 @@
-import { Stack, router } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Stack, router, useFocusEffect } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Platform, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
+import { ContinueReadingRow } from '@/components/ContinueReadingRow';
 import { ItemCard } from '@/components/ItemCard';
 import { ItemRow } from '@/components/ItemRow';
 import { OptionSheet } from '@/components/OptionSheet';
@@ -12,12 +14,14 @@ import { TextField } from '@/components/TextField';
 import { useT } from '@/i18n/useT';
 import { SORT_ORDERS, filterItems, sortItems } from '@/models/query';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
-import type { Id } from '@/models/types';
+import type { BookSummary, Id } from '@/models/types';
 import { useSettings } from '@/state/SettingsProvider';
 import { useShelfState } from '@/state/ShelfProvider';
+import { loadBookSummaries } from '@/storage/database';
 import { fontSize, makeStyles, spacing } from '@/theme';
 
 const MIN_CARD_WIDTH = 140;
+const CONTINUE_READING_MAX = 10;
 
 export default function ShelvesScreen() {
   const state = useShelfState();
@@ -40,11 +44,38 @@ export default function ShelvesScreen() {
 
   // Falls back to the first shelf if the selected one was deleted.
   const shelf = state.shelves.find((s) => s.id === selectedId) ?? state.shelves[0];
-  const items = useMemo(
-    () => (shelf ? sortItems(filterItems(selectItemsOnShelf(state, shelf.id), query), settings.sortOrder) : []),
-    [state, shelf, query, settings.sortOrder],
+  // Reading progress of imported books, reloaded whenever the shelf comes back into view.
+  const db = useSQLiteContext();
+  const [books, setBooks] = useState<Map<Id, BookSummary>>(new Map());
+  useFocusEffect(
+    useCallback(() => {
+      let current = true;
+      loadBookSummaries(db)
+        .then((loaded) => current && setBooks(loaded))
+        .catch((error: unknown) => console.warn('Could not load reading progress', error));
+      return () => {
+        current = false;
+      };
+    }, [db]),
   );
+
+  const items = useMemo(() => {
+    if (!shelf) return [];
+    const lastRead = new Map([...books].map(([id, book]) => [id, book.lastReadAt]));
+    return sortItems(filterItems(selectItemsOnShelf(state, shelf.id), query), settings.sortOrder, lastRead);
+  }, [state, shelf, query, settings.sortOrder, books]);
   const searching = query.trim() !== '';
+
+  const continueReading = useMemo(() => {
+    if (!shelf) return [];
+    return selectItemsOnShelf(state, shelf.id)
+      .flatMap((item) => {
+        const book = books.get(item.id);
+        return book && book.lastReadAt !== null && !book.finished ? [{ item, book, at: book.lastReadAt }] : [];
+      })
+      .sort((a, b) => b.at - a.at)
+      .slice(0, CONTINUE_READING_MAX);
+  }, [state, shelf, books]);
 
   const listView = settings.viewMode === 'list';
   const columns = listView ? 1 : Math.max(2, Math.floor((width - spacing.lg * 2) / MIN_CARD_WIDTH));
@@ -134,11 +165,19 @@ export default function ShelvesScreen() {
                   : t('home.empty', { shelf: shelf.name })}
               </Text>
             }
+            ListHeaderComponent={
+              searching ? undefined : (
+                <ContinueReadingRow
+                  books={continueReading}
+                  onOpen={(item) => router.push({ pathname: '/read/[itemId]', params: { itemId: item.id } })}
+                />
+              )
+            }
             renderItem={({ item }) =>
               listView ? (
-                <ItemRow item={item} onPress={() => openItem(item.id)} />
+                <ItemRow item={item} book={books.get(item.id)} onPress={() => openItem(item.id)} />
               ) : (
-                <ItemCard item={item} width={cardWidth} onPress={() => openItem(item.id)} />
+                <ItemCard item={item} width={cardWidth} book={books.get(item.id)} onPress={() => openItem(item.id)} />
               )
             }
           />

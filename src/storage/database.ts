@@ -3,11 +3,15 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { languageFromCode } from '../i18n';
 import { createDefaultState } from '../models/defaults';
-import type { Chapter, Id, ReadingProgress, ShelfState } from '../models/types';
+import type { Bookmark, BookSummary, Chapter, Id, ReadingProgress, ShelfState } from '../models/types';
 import {
   rowsToState,
+  rowToBookmark,
+  rowToBookSummary,
   rowToChapter,
   rowToProgress,
+  type BookmarkRow,
+  type BookSummaryRow,
   type ChapterRow,
   type ItemRow,
   type ProgressRow,
@@ -18,9 +22,13 @@ import {
   CREATE_TABLES_V1,
   CREATE_TABLES_V2,
   CREATE_TABLES_V3,
+  DELETE_BOOKMARK,
   MIGRATE_V4,
+  MIGRATE_V5,
   SCHEMA_VERSION,
   SELECT_BOOK_ITEM_IDS,
+  SELECT_BOOK_SUMMARIES,
+  SELECT_BOOKMARKS,
   SELECT_CHAPTERS,
   SELECT_ITEMS,
   SELECT_PROGRESS,
@@ -29,7 +37,14 @@ import {
   SELECT_TAGS,
   UPSERT_SETTING,
 } from './schema';
-import { insertState, replaceChapters, saveProgressStatement, type Statement } from './statements';
+import {
+  finishedStatements,
+  insertBookmarkStatement,
+  insertState,
+  replaceChapters,
+  saveProgressStatement,
+  type Statement,
+} from './statements';
 
 export const DATABASE_NAME = 'evershelf.db';
 
@@ -57,7 +72,10 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
     if (version < 4) {
       await db.execAsync(MIGRATE_V4);
     }
-    // Future upgrades go here: if (version < 5) { ... }
+    if (version < 5) {
+      await db.execAsync(MIGRATE_V5);
+    }
+    // Future upgrades go here: if (version < 6) { ... }
   });
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }
@@ -102,9 +120,42 @@ export async function loadProgress(db: SQLiteDatabase, itemId: Id): Promise<Read
   return row ? rowToProgress(row) : null;
 }
 
-export async function saveProgress(db: SQLiteDatabase, progress: ReadingProgress): Promise<void> {
+export async function saveProgress(db: SQLiteDatabase, progress: Omit<ReadingProgress, 'finishedAt'>): Promise<void> {
   const s = saveProgressStatement(progress);
   await db.runAsync(s.sql, s.params);
+}
+
+/** Progress for every book, for badges, the Continue reading row and sorting. */
+export async function loadBookSummaries(db: SQLiteDatabase): Promise<Map<Id, BookSummary>> {
+  const rows = await db.getAllAsync<BookSummaryRow>(SELECT_BOOK_SUMMARIES);
+  return new Map(rows.map((row) => [row.item_id, rowToBookSummary(row)]));
+}
+
+/**
+ * Marks a book finished (or not). A book that was never opened gets a
+ * position at its last chapter first, since finished is kept with the position.
+ */
+export async function setBookFinished(
+  db: SQLiteDatabase,
+  itemId: Id,
+  finished: boolean,
+  lastChapterId: Id,
+): Promise<void> {
+  await runStatements(db, finishedStatements(itemId, finished, lastChapterId, Date.now()));
+}
+
+export async function loadBookmarks(db: SQLiteDatabase, itemId: Id): Promise<Bookmark[]> {
+  const rows = await db.getAllAsync<BookmarkRow>(SELECT_BOOKMARKS, [itemId]);
+  return rows.map(rowToBookmark);
+}
+
+export async function addBookmark(db: SQLiteDatabase, bookmark: Bookmark): Promise<void> {
+  const s = insertBookmarkStatement(bookmark);
+  await db.runAsync(s.sql, s.params);
+}
+
+export async function removeBookmark(db: SQLiteDatabase, bookmarkId: Id): Promise<void> {
+  await db.runAsync(DELETE_BOOKMARK, [bookmarkId]);
 }
 
 /** Runs statements together so a change is saved completely or not at all. */

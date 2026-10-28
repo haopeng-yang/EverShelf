@@ -9,8 +9,12 @@ import { shelfReducer, type ShelfAction } from '../src/models/shelfReducer';
 import type { Chapter, Id, ShelfState } from '../src/models/types';
 import {
   rowsToState,
+  rowToBookmark,
+  rowToBookSummary,
   rowToChapter,
   rowToProgress,
+  type BookmarkRow,
+  type BookSummaryRow,
   type ChapterRow,
   type ItemRow,
   type ProgressRow,
@@ -22,7 +26,10 @@ import {
   CREATE_TABLES_V2,
   CREATE_TABLES_V3,
   MIGRATE_V4,
+  MIGRATE_V5,
   SELECT_BOOK_ITEM_IDS,
+  SELECT_BOOK_SUMMARIES,
+  SELECT_BOOKMARKS,
   SELECT_CHAPTERS,
   SELECT_ITEMS,
   SELECT_PROGRESS,
@@ -32,6 +39,8 @@ import {
   UPSERT_SETTING,
 } from '../src/storage/schema';
 import {
+  finishedStatements,
+  insertBookmarkStatement,
   insertState,
   replaceChapters,
   saveProgressStatement,
@@ -47,6 +56,7 @@ function openTestDb(): DatabaseSync {
   db.exec(CREATE_TABLES_V2);
   db.exec(CREATE_TABLES_V3);
   db.exec(MIGRATE_V4);
+  db.exec(MIGRATE_V5);
   return db;
 }
 
@@ -174,7 +184,7 @@ describe('Book storage', () => {
   it('replacing chapters drops the old ones and their progress', () => {
     const { db, itemId } = withBook();
     run(db, replaceChapters(itemId, chapters(itemId, ['Old 1', 'Old 2'])));
-    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch1`, paragraph: 10, updatedAt: 1 })]);
+    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch1`, paragraph: 10, percent: 0.5, updatedAt: 1 })]);
 
     const fresh = chapters(itemId, ['New']).map((c) => ({ ...c, id: 'new-ch' }));
     run(db, replaceChapters(itemId, fresh));
@@ -185,9 +195,16 @@ describe('Book storage', () => {
   it('saves and overwrites reading progress', () => {
     const { db, itemId } = withBook();
     run(db, replaceChapters(itemId, chapters(itemId, ['One', 'Two'])));
-    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch0`, paragraph: 12, updatedAt: 1 })]);
-    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch1`, paragraph: 40, updatedAt: 2 })]);
-    expect(loadProgress(db, itemId)).toEqual({ itemId, chapterId: `${itemId}-ch1`, paragraph: 40, updatedAt: 2 });
+    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch0`, paragraph: 12, percent: 0.5, updatedAt: 1 })]);
+    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch1`, paragraph: 40, percent: 0.5, updatedAt: 2 })]);
+    expect(loadProgress(db, itemId)).toEqual({
+      itemId,
+      chapterId: `${itemId}-ch1`,
+      paragraph: 40,
+      percent: 0.5,
+      updatedAt: 2,
+      finishedAt: null,
+    });
   });
 
   it('editing the item keeps its chapters; deleting it removes them', () => {
@@ -195,7 +212,7 @@ describe('Book storage', () => {
     const { db, itemId } = book;
     const saved = chapters(itemId, ['One']);
     run(db, replaceChapters(itemId, saved));
-    run(db, [saveProgressStatement({ itemId, chapterId: saved[0].id, paragraph: 0, updatedAt: 1 })]);
+    run(db, [saveProgressStatement({ itemId, chapterId: saved[0].id, paragraph: 0, percent: 0.5, updatedAt: 1 })]);
 
     const item = book.state.items[0];
     const state = dispatch(db, book.state, { type: 'item/save', item: { ...item, title: 'Dune (1965)' }, now: 5 });
@@ -212,5 +229,58 @@ describe('Book storage', () => {
     // A copy, as a restored backup would be: the reducer skips identical states.
     dispatch(db, state, { type: 'state/replace', state: { ...state } });
     expect(db.prepare(SELECT_BOOK_ITEM_IDS).all()).toEqual([]);
+  });
+
+  it('summarises every book with its progress, and marks books finished', () => {
+    const { db, state, itemId } = withBook();
+    run(db, replaceChapters(itemId, chapters(itemId, ['One', 'Two', 'Three'])));
+    const summaries = () =>
+      db
+        .prepare(SELECT_BOOK_SUMMARIES)
+        .all()
+        .map((r) => rowToBookSummary({ ...r } as unknown as BookSummaryRow));
+
+    // Opened never: no progress yet.
+    expect(summaries()).toEqual([{ itemId, chapterCount: 3, percent: 0, lastReadAt: null, finished: false }]);
+
+    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch1`, paragraph: 3, percent: 0.4, updatedAt: 7 })]);
+    expect(summaries()[0]).toEqual({ itemId, chapterCount: 3, percent: 0.4, lastReadAt: 7, finished: false });
+
+    // Finishing keeps the position; saving a new position keeps "finished".
+    run(db, finishedStatements(itemId, true, `${itemId}-ch2`, 9));
+    expect(summaries()[0]).toMatchObject({ percent: 1, finished: true, lastReadAt: 7 });
+    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch0`, paragraph: 0, percent: 0, updatedAt: 10 })]);
+    expect(summaries()[0]).toMatchObject({ finished: true });
+    run(db, finishedStatements(itemId, false, `${itemId}-ch2`, 11));
+    expect(summaries()[0]).toMatchObject({ percent: 0, finished: false, lastReadAt: 10 });
+
+    // A book never opened can be marked finished too.
+    const other = dispatch(db, state, addItem(state.shelves[0], 'Other')).items.at(-1)!.id;
+    run(db, replaceChapters(other, chapters(other, ['Only'])));
+    run(db, finishedStatements(other, true, `${other}-ch0`, 12));
+    expect(summaries().find((s) => s.itemId === other)).toMatchObject({ percent: 1, finished: true });
+  });
+
+  it('saves bookmarks, and drops them with their chapter', () => {
+    const { db, itemId } = withBook();
+    run(db, replaceChapters(itemId, chapters(itemId, ['One', 'Two'])));
+    const bookmark = {
+      id: 'bm1',
+      itemId,
+      chapterId: `${itemId}-ch1`,
+      paragraph: 4,
+      excerpt: 'The lamp flickered.',
+      createdAt: 3,
+    };
+    run(db, [insertBookmarkStatement(bookmark)]);
+    const bookmarks = () =>
+      db
+        .prepare(SELECT_BOOKMARKS)
+        .all(itemId)
+        .map((r) => rowToBookmark({ ...r } as unknown as BookmarkRow));
+    expect(bookmarks()).toEqual([bookmark]);
+
+    run(db, replaceChapters(itemId, chapters(itemId, ['New'])));
+    expect(bookmarks()).toEqual([]);
   });
 });

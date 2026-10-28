@@ -1,7 +1,7 @@
 import type { ShelfAction } from '../models/shelfReducer';
-import type { Chapter, Id, Item, ReadingProgress, Shelf, ShelfState } from '../models/types';
+import type { Bookmark, Chapter, Id, Item, ReadingProgress, Shelf, ShelfState } from '../models/types';
 import { chapterToRow, itemToRow, shelfToRow, tagToRow } from './rows';
-import { UPSERT_PROGRESS } from './schema';
+import { INSERT_BOOKMARK, SET_FINISHED, UPSERT_PROGRESS } from './schema';
 
 export type SqlValue = string | number | null;
 
@@ -116,10 +116,18 @@ export function replaceChapters(itemId: Id, chapters: Chapter[]): Statement[] {
   ];
 }
 
-export function saveProgressStatement(progress: ReadingProgress): Statement {
+/** Saves the reading position. Whether the book is finished is kept as it was. */
+export function saveProgressStatement(progress: Omit<ReadingProgress, 'finishedAt'>): Statement {
   return {
     sql: UPSERT_PROGRESS,
-    params: [progress.itemId, progress.chapterId, progress.paragraph, progress.updatedAt],
+    params: [progress.itemId, progress.chapterId, progress.paragraph, progress.percent, progress.updatedAt],
+  };
+}
+
+export function insertBookmarkStatement(bookmark: Bookmark): Statement {
+  return {
+    sql: INSERT_BOOKMARK,
+    params: [bookmark.id, bookmark.itemId, bookmark.chapterId, bookmark.paragraph, bookmark.excerpt, bookmark.createdAt],
   };
 }
 
@@ -158,4 +166,16 @@ function insertTags(item: Item): Statement[] {
       params: [row.id, row.item_id, row.name, row.value, row.position],
     };
   });
+}
+
+/** See setBookFinished in database.ts. */
+export function finishedStatements(itemId: Id, finished: boolean, lastChapterId: Id, now: number): Statement[] {
+  if (!finished) return [{ sql: SET_FINISHED, params: [null, itemId] }];
+  return [
+    {
+      sql: 'INSERT OR IGNORE INTO reading_progress (item_id, chapter_id, paragraph, percent, updated_at) VALUES (?, ?, 0, 1, ?)',
+      params: [itemId, lastChapterId, now],
+    },
+    { sql: SET_FINISHED, params: [now, itemId] },
+  ];
 }

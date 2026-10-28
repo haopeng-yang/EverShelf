@@ -2,7 +2,7 @@
 // run the same SQL against Node's built-in SQLite.
 
 /** Bump this and add a step in database.ts `migrate` whenever the tables change. */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const CREATE_TABLES_V1 = `
 CREATE TABLE shelves (
@@ -69,13 +69,44 @@ ALTER TABLE reading_progress RENAME COLUMN scroll_offset TO paragraph;
 UPDATE reading_progress SET paragraph = 0;
 `;
 
+/**
+ * Version 5: how far through the book the reader is (0–1, for progress
+ * badges), when it was marked finished, and bookmarks.
+ */
+export const MIGRATE_V5 = `
+ALTER TABLE reading_progress ADD COLUMN percent REAL NOT NULL DEFAULT 0;
+ALTER TABLE reading_progress ADD COLUMN finished_at INTEGER;
+CREATE TABLE bookmarks (
+  id TEXT PRIMARY KEY NOT NULL,
+  item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  chapter_id TEXT NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+  paragraph INTEGER NOT NULL,
+  excerpt TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX bookmarks_item_id ON bookmarks(item_id);
+`;
+
+/** One row per book (item with chapters), with its progress if it has been opened. */
+export const SELECT_BOOK_SUMMARIES = `
+SELECT c.item_id, COUNT(*) AS chapter_count, p.chapter_id, p.percent, p.updated_at, p.finished_at
+FROM chapters c LEFT JOIN reading_progress p ON p.item_id = c.item_id
+GROUP BY c.item_id`;
+export const SELECT_BOOKMARKS =
+  'SELECT id, item_id, chapter_id, paragraph, excerpt, created_at FROM bookmarks WHERE item_id = ? ORDER BY created_at';
+export const INSERT_BOOKMARK =
+  'INSERT INTO bookmarks (id, item_id, chapter_id, paragraph, excerpt, created_at) VALUES (?, ?, ?, ?, ?, ?)';
+export const DELETE_BOOKMARK = 'DELETE FROM bookmarks WHERE id = ?';
+export const SET_FINISHED = 'UPDATE reading_progress SET finished_at = ? WHERE item_id = ?';
+
 export const SELECT_CHAPTERS =
   'SELECT id, item_id, position, title, file_name, char_count FROM chapters WHERE item_id = ? ORDER BY position';
 export const SELECT_BOOK_ITEM_IDS = 'SELECT DISTINCT item_id FROM chapters';
 export const SELECT_PROGRESS =
-  'SELECT item_id, chapter_id, paragraph, updated_at FROM reading_progress WHERE item_id = ?';
-export const UPSERT_PROGRESS = `INSERT INTO reading_progress (item_id, chapter_id, paragraph, updated_at) VALUES (?, ?, ?, ?)
-ON CONFLICT(item_id) DO UPDATE SET chapter_id = excluded.chapter_id, paragraph = excluded.paragraph, updated_at = excluded.updated_at`;
+  'SELECT item_id, chapter_id, paragraph, percent, updated_at, finished_at FROM reading_progress WHERE item_id = ?';
+export const UPSERT_PROGRESS = `INSERT INTO reading_progress (item_id, chapter_id, paragraph, percent, updated_at) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(item_id) DO UPDATE SET chapter_id = excluded.chapter_id, paragraph = excluded.paragraph,
+  percent = excluded.percent, updated_at = excluded.updated_at`;
 
 export const SELECT_SETTINGS = 'SELECT key, value FROM settings';
 export const UPSERT_SETTING =

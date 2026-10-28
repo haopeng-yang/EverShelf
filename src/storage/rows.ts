@@ -1,4 +1,4 @@
-import type { Chapter, Item, ReadingProgress, Shelf, ShelfState, Tag } from '../models/types';
+import type { Bookmark, BookSummary, Chapter, Item, ReadingProgress, Shelf, ShelfState, Tag } from '../models/types';
 
 // Plain rows as they come out of the tables in schema.ts.
 
@@ -39,7 +39,27 @@ export interface ProgressRow {
   item_id: string;
   chapter_id: string;
   paragraph: number;
+  percent: number;
   updated_at: number;
+  finished_at: number | null;
+}
+
+export interface BookmarkRow {
+  id: string;
+  item_id: string;
+  chapter_id: string;
+  paragraph: number;
+  excerpt: string;
+  created_at: number;
+}
+
+export interface BookSummaryRow {
+  item_id: string;
+  chapter_count: number;
+  chapter_id: string | null;
+  percent: number | null;
+  updated_at: number | null;
+  finished_at: number | null;
 }
 
 /** Builds app state from rows already sorted by the SELECT_* queries. */
@@ -118,7 +138,31 @@ export function rowToProgress(row: ProgressRow): ReadingProgress {
     itemId: row.item_id,
     chapterId: row.chapter_id,
     paragraph: row.paragraph,
+    percent: row.percent,
     updatedAt: row.updated_at,
+    finishedAt: row.finished_at,
+  };
+}
+
+export function rowToBookmark(row: BookmarkRow): Bookmark {
+  return {
+    id: row.id,
+    itemId: row.item_id,
+    chapterId: row.chapter_id,
+    paragraph: row.paragraph,
+    excerpt: row.excerpt,
+    createdAt: row.created_at,
+  };
+}
+
+export function rowToBookSummary(row: BookSummaryRow): BookSummary {
+  const finished = row.finished_at !== null;
+  return {
+    itemId: row.item_id,
+    chapterCount: row.chapter_count,
+    percent: finished ? 1 : (row.percent ?? 0),
+    lastReadAt: row.updated_at,
+    finished,
   };
 }
 
