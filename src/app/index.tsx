@@ -1,6 +1,6 @@
 import { Stack, router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Text, View, useWindowDimensions } from 'react-native';
+import { FlatList, Platform, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -142,13 +142,24 @@ export default function ShelvesScreen() {
               )
             }
           />
-          <Button
-            title={t('home.addItem')}
-            variant="primary"
-            accessibilityLabel={t('home.addItemTo', { shelf: shelf.name })}
-            style={[styles.fab, { bottom: insets.bottom + spacing.lg }]}
-            onPress={() => router.push({ pathname: '/item/edit', params: { shelfId: shelf.id } })}
-          />
+          <View style={[styles.fabRow, { bottom: insets.bottom + spacing.lg }]}>
+            {/* Book files are stored on the device, which the web version can't do. */}
+            {Platform.OS !== 'web' && (
+              <Button
+                title={t('home.importBook')}
+                accessibilityLabel={t('home.importBookTo', { shelf: shelf.name })}
+                style={styles.fab}
+                onPress={() => router.push({ pathname: '/import', params: { shelfId: shelf.id } })}
+              />
+            )}
+            <Button
+              title={t('home.addItem')}
+              variant="primary"
+              accessibilityLabel={t('home.addItemTo', { shelf: shelf.name })}
+              style={styles.fab}
+              onPress={() => router.push({ pathname: '/item/edit', params: { shelfId: shelf.id } })}
+            />
+          </View>
         </>
       )}
 
@@ -176,9 +187,8 @@ const useStyles = makeStyles((c) => ({
   row: { gap: spacing.md },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.lg },
   emptyText: { fontSize: fontSize.body, color: c.textMuted, textAlign: 'center', marginTop: spacing.xl },
+  fabRow: { position: 'absolute', right: spacing.lg, flexDirection: 'row', gap: spacing.sm },
   fab: {
-    position: 'absolute',
-    right: spacing.lg,
     borderRadius: 28,
     shadowColor: '#000',
     shadowOpacity: 0.2,

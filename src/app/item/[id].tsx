@@ -1,4 +1,6 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
+import { useEffect, useState } from 'react';
 import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -6,6 +8,7 @@ import { Cover } from '@/components/Cover';
 import { NotFound } from '@/components/NotFound';
 import { useT } from '@/i18n/useT';
 import { useShelfState } from '@/state/ShelfProvider';
+import { loadChapters } from '@/storage/database';
 import { fontSize, makeStyles, spacing } from '@/theme';
 
 /** Wider than this, the cover sits beside the details (as in the sketch); narrower, above them. */
@@ -17,6 +20,17 @@ export default function ItemScreen() {
   const styles = useStyles();
   const t = useT();
   const { width } = useWindowDimensions();
+  const db = useSQLiteContext();
+  const [chapterCount, setChapterCount] = useState(0);
+  useEffect(() => {
+    let current = true;
+    loadChapters(db, id)
+      .then((chapters) => current && setChapterCount(chapters.length))
+      .catch((error: unknown) => console.warn('Could not load chapters', error));
+    return () => {
+      current = false;
+    };
+  }, [db, id]);
   const item = state.items.find((i) => i.id === id);
   if (!item) return <NotFound what="item" />;
 
@@ -38,6 +52,7 @@ export default function ItemScreen() {
           {item.tags.map((tag) => (
             <Field key={tag.id} name={tag.name} value={tag.value} />
           ))}
+          {chapterCount > 0 && <Text style={styles.chapters}>{t('item.chapters', { count: chapterCount })}</Text>}
         </View>
       </View>
 
@@ -76,5 +91,6 @@ const useStyles = makeStyles((c) => ({
   fieldName: { fontSize: fontSize.small, color: c.textMuted, fontWeight: '600' },
   fieldValue: { fontSize: fontSize.body, color: c.text, lineHeight: 22 },
   fieldEmpty: { color: c.textMuted },
+  chapters: { fontSize: fontSize.small, color: c.textMuted },
   footer: { alignItems: 'flex-end' },
 }));

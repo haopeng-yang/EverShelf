@@ -22,7 +22,14 @@ import { statementsForAction } from '../storage/statements';
 // read; every change is also written to SQLite in the background, in order.
 // Must be rendered inside expo-sqlite's <SQLiteProvider>.
 const ShelfStateContext = createContext<ShelfState | null>(null);
-const ShelfDispatchContext = createContext<((action: ShelfAction) => void) | null>(null);
+/**
+ * Applies a change right away and saves it in the background. The returned
+ * promise says whether the save worked; most screens can ignore it, but code
+ * that writes related rows next (like a book's chapters) should wait for it.
+ */
+export type ShelfDispatch = (action: ShelfAction) => Promise<boolean>;
+
+const ShelfDispatchContext = createContext<ShelfDispatch | null>(null);
 
 export function ShelfProvider({ children }: { children: ReactNode }) {
   const db = useSQLiteContext();
@@ -43,19 +50,27 @@ export function ShelfProvider({ children }: { children: ReactNode }) {
       .catch((error: unknown) => setLoadError(String(error)));
   }, [db]);
 
-  const dispatch = useCallback(
-    (action: ShelfAction) => {
+  const dispatch = useCallback<ShelfDispatch>(
+    (action) => {
       const prev = stateRef.current;
-      if (!prev) return;
+      if (!prev) return Promise.resolve(false);
       const next = shelfReducer(prev, action);
-      if (next === prev) return;
+      if (next === prev) return Promise.resolve(true);
       stateRef.current = next;
       setState(next);
 
       const statements = statementsForAction(action, next);
-      saveQueue.current = saveQueue.current
+      const saved = saveQueue.current
         .then(() => runStatements(db, statements))
-        .catch((error: unknown) => console.error('Failed to save change', action.type, error));
+        .then(
+          () => true,
+          (error: unknown) => {
+            console.error('Failed to save change', action.type, error);
+            return false;
+          },
+        );
+      saveQueue.current = saved.then(() => undefined);
+      return saved;
     },
     [db],
   );
@@ -76,7 +91,7 @@ export function useShelfState(): ShelfState {
   return state;
 }
 
-export function useShelfDispatch(): (action: ShelfAction) => void {
+export function useShelfDispatch(): ShelfDispatch {
   const dispatch = useContext(ShelfDispatchContext);
   if (!dispatch) throw new Error('useShelfDispatch must be used inside <ShelfProvider>');
   return dispatch;
