@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { SettingsProvider } from '@/state/SettingsProvider';
 import { ShelfProvider } from '@/state/ShelfProvider';
@@ -9,15 +10,17 @@ import { AppThemeProvider, useTheme } from '@/theme';
 
 export default function RootLayout() {
   return (
-    <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrate}>
-      <SettingsProvider>
-        <AppThemeProvider>
-          <ShelfProvider>
-            <ThemedStack />
-          </ShelfProvider>
-        </AppThemeProvider>
-      </SettingsProvider>
-    </SQLiteProvider>
+    <KeyboardProvider>
+      <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrate}>
+        <SettingsProvider>
+          <AppThemeProvider>
+            <ShelfProvider>
+              <ThemedStack />
+            </ShelfProvider>
+          </AppThemeProvider>
+        </SettingsProvider>
+      </SQLiteProvider>
+    </KeyboardProvider>
   );
 }
 

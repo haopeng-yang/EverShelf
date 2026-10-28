@@ -1,6 +1,7 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { Button } from '@/components/Button';
 import { confirm, showMessage } from '@/components/dialogs';
@@ -73,7 +74,7 @@ export default function EditShelfScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+    <KeyboardAwareScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" bottomOffset={spacing.xl}>
       <Stack.Screen
         options={{
           title: shelf ? t('shelfEdit.editTitle') : t('shelfEdit.newTitle'),
@@ -145,7 +146,7 @@ export default function EditShelfScreen() {
           </View>
         </>
       )}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

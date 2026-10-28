@@ -5,6 +5,7 @@
   "dependencies": {
     "expo": "~58.0.19",
     "expo-constants": "~58.0.13",
+    "expo-dev-client": "~58.0.15",
     "expo-document-picker": "~58.0.4",
     "expo-file-system": "~58.0.11",
     "expo-image-picker": "~58.0.10",
@@ -14,12 +15,16 @@
     "expo-sharing": "~58.0.20",
     "expo-sqlite": "~58.0.14",
     "expo-status-bar": "~58.0.4",
+    "expo-updates": "~58.0.18",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.0",
+    "react-native-keyboard-controller": "1.22.7",
+    "react-native-reanimated": "4.7.1",
     "react-native-safe-area-context": "~5.10.1",
     "react-native-screens": "~4.30.0",
-    "react-native-web": "^0.21.4"
+    "react-native-web": "^0.21.4",
+    "react-native-worklets": "0.13.0"
   },
   "devDependencies": {
     "@types/jest": "30.0.0",
@@ -33,12 +38,14 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "jest",
     "test:watch": "jest --watchAll",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build:android": "npx eas-cli@latest build --platform android --profile production",
+    "update": "npx eas-cli@latest update --channel production --environment production"
   },
   "jest": {
     "preset": "jest-expo"

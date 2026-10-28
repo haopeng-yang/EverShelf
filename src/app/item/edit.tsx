@@ -1,7 +1,8 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Platform, ScrollView, Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { Button } from '@/components/Button';
 import { Cover } from '@/components/Cover';
@@ -113,7 +114,7 @@ export default function EditItemScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+    <KeyboardAwareScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" bottomOffset={spacing.xl}>
       <Stack.Screen
         options={{
           title: original ? t('itemEdit.editTitle') : t('itemEdit.newTitle', { shelf: shelf.name }),
@@ -197,7 +198,7 @@ export default function EditItemScreen() {
       </View>
 
       {original && <Button title={t('itemEdit.deleteItem')} variant="danger" onPress={remove} />}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

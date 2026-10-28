@@ -2,15 +2,22 @@
   "expo": {
     "name": "EverShelf",
     "slug": "EverShelf",
+    "owner": "haopeng",
     "scheme": "evershelf",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.haopengyang.evershelf",
+      "infoPlist": {}
     },
     "android": {
+      "package": "com.haopengyang.evershelf",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -35,6 +42,19 @@
       ],
       "expo-sharing",
       "expo-localization"
-    ]
+    ],
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "ca60b5d2-74d3-44ca-9903-5ca6649c6955"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/ca60b5d2-74d3-44ca-9903-5ca6649c6955"
+    }
   }
 }
