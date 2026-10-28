@@ -177,6 +177,20 @@ export const en = {
   'import.saveFailed': 'Could not save the book: {error}',
   'item.chapters': '{count} chapters',
   'item.chapters_one': '1 chapter',
+  'item.read': 'Read',
+  'item.continueReading': 'Continue reading',
+
+  // Reader
+  'reader.back': 'Back',
+  'reader.previous': '‹ Previous',
+  'reader.next': 'Next ›',
+  'reader.nextChapter': 'Next chapter ›',
+  'reader.chapterOf': 'Chapter {n} of {total}',
+  'reader.contents': 'Contents ({count} chapters)',
+  'reader.contents_one': 'Contents (1 chapter)',
+  'reader.endOfBook': 'The end. You’ve finished this book.',
+  'reader.noChapters': 'This book has no chapters to read.',
+  'reader.missingText': 'This chapter’s text is missing. Try importing the book again.',
 
   'backupError.notBackup': 'This file is not an EverShelf backup.',
   'backupError.newerVersion': 'This backup was made by a newer version of EverShelf. Please update the app first.',

@@ -119,7 +119,7 @@ export function replaceChapters(itemId: Id, chapters: Chapter[]): Statement[] {
 export function saveProgressStatement(progress: ReadingProgress): Statement {
   return {
     sql: UPSERT_PROGRESS,
-    params: [progress.itemId, progress.chapterId, progress.scrollOffset, progress.updatedAt],
+    params: [progress.itemId, progress.chapterId, progress.paragraph, progress.updatedAt],
   };
 }
 

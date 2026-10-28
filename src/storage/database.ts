@@ -18,6 +18,7 @@ import {
   CREATE_TABLES_V1,
   CREATE_TABLES_V2,
   CREATE_TABLES_V3,
+  MIGRATE_V4,
   SCHEMA_VERSION,
   SELECT_BOOK_ITEM_IDS,
   SELECT_CHAPTERS,
@@ -53,7 +54,10 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
     if (version < 3) {
       await db.execAsync(CREATE_TABLES_V3);
     }
-    // Future upgrades go here: if (version < 4) { ... }
+    if (version < 4) {
+      await db.execAsync(MIGRATE_V4);
+    }
+    // Future upgrades go here: if (version < 5) { ... }
   });
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }

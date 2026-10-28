@@ -21,6 +21,7 @@ import {
   CREATE_TABLES_V1,
   CREATE_TABLES_V2,
   CREATE_TABLES_V3,
+  MIGRATE_V4,
   SELECT_BOOK_ITEM_IDS,
   SELECT_CHAPTERS,
   SELECT_ITEMS,
@@ -45,6 +46,7 @@ function openTestDb(): DatabaseSync {
   run(db, insertState(createDefaultState()));
   db.exec(CREATE_TABLES_V2);
   db.exec(CREATE_TABLES_V3);
+  db.exec(MIGRATE_V4);
   return db;
 }
 
@@ -172,7 +174,7 @@ describe('Book storage', () => {
   it('replacing chapters drops the old ones and their progress', () => {
     const { db, itemId } = withBook();
     run(db, replaceChapters(itemId, chapters(itemId, ['Old 1', 'Old 2'])));
-    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch1`, scrollOffset: 10, updatedAt: 1 })]);
+    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch1`, paragraph: 10, updatedAt: 1 })]);
 
     const fresh = chapters(itemId, ['New']).map((c) => ({ ...c, id: 'new-ch' }));
     run(db, replaceChapters(itemId, fresh));
@@ -183,9 +185,9 @@ describe('Book storage', () => {
   it('saves and overwrites reading progress', () => {
     const { db, itemId } = withBook();
     run(db, replaceChapters(itemId, chapters(itemId, ['One', 'Two'])));
-    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch0`, scrollOffset: 120.5, updatedAt: 1 })]);
-    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch1`, scrollOffset: 40, updatedAt: 2 })]);
-    expect(loadProgress(db, itemId)).toEqual({ itemId, chapterId: `${itemId}-ch1`, scrollOffset: 40, updatedAt: 2 });
+    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch0`, paragraph: 12, updatedAt: 1 })]);
+    run(db, [saveProgressStatement({ itemId, chapterId: `${itemId}-ch1`, paragraph: 40, updatedAt: 2 })]);
+    expect(loadProgress(db, itemId)).toEqual({ itemId, chapterId: `${itemId}-ch1`, paragraph: 40, updatedAt: 2 });
   });
 
   it('editing the item keeps its chapters; deleting it removes them', () => {
@@ -193,7 +195,7 @@ describe('Book storage', () => {
     const { db, itemId } = book;
     const saved = chapters(itemId, ['One']);
     run(db, replaceChapters(itemId, saved));
-    run(db, [saveProgressStatement({ itemId, chapterId: saved[0].id, scrollOffset: 0, updatedAt: 1 })]);
+    run(db, [saveProgressStatement({ itemId, chapterId: saved[0].id, paragraph: 0, updatedAt: 1 })]);
 
     const item = book.state.items[0];
     const state = dispatch(db, book.state, { type: 'item/save', item: { ...item, title: 'Dune (1965)' }, now: 5 });

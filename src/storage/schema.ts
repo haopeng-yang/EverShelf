@@ -2,7 +2,7 @@
 // run the same SQL against Node's built-in SQLite.
 
 /** Bump this and add a step in database.ts `migrate` whenever the tables change. */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const CREATE_TABLES_V1 = `
 CREATE TABLE shelves (
@@ -60,15 +60,24 @@ CREATE TABLE reading_progress (
 );
 `;
 
+/**
+ * Version 4: progress is a paragraph number, not a pixel offset. Nothing had
+ * been saved in pixels yet (there was no reader), so old values are cleared.
+ */
+export const MIGRATE_V4 = `
+ALTER TABLE reading_progress RENAME COLUMN scroll_offset TO paragraph;
+UPDATE reading_progress SET paragraph = 0;
+`;
+
 export const SELECT_CHAPTERS =
   'SELECT id, item_id, position, title, file_name, char_count FROM chapters WHERE item_id = ? ORDER BY position';
 export const SELECT_BOOK_ITEM_IDS = 'SELECT DISTINCT item_id FROM chapters';
 export const SELECT_PROGRESS =
-  'SELECT item_id, chapter_id, scroll_offset, updated_at FROM reading_progress WHERE item_id = ?';
-export const UPSERT_PROGRESS = `INSERT INTO reading_progress (item_id, chapter_id, scroll_offset, updated_at) VALUES (?, ?, ?, ?)
-ON CONFLICT(item_id) DO UPDATE SET chapter_id = excluded.chapter_id, scroll_offset = excluded.scroll_offset, updated_at = excluded.updated_at`;
+  'SELECT item_id, chapter_id, paragraph, updated_at FROM reading_progress WHERE item_id = ?';
+export const UPSERT_PROGRESS = `INSERT INTO reading_progress (item_id, chapter_id, paragraph, updated_at) VALUES (?, ?, ?, ?)
+ON CONFLICT(item_id) DO UPDATE SET chapter_id = excluded.chapter_id, paragraph = excluded.paragraph, updated_at = excluded.updated_at`;
 
-export const SELECT_SETTINGS ='SELECT key, value FROM settings';
+export const SELECT_SETTINGS = 'SELECT key, value FROM settings';
 export const UPSERT_SETTING =
   'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value';
 

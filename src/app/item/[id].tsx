@@ -1,6 +1,6 @@
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { Button } from '@/components/Button';
@@ -8,7 +8,7 @@ import { Cover } from '@/components/Cover';
 import { NotFound } from '@/components/NotFound';
 import { useT } from '@/i18n/useT';
 import { useShelfState } from '@/state/ShelfProvider';
-import { loadChapters } from '@/storage/database';
+import { loadChapters, loadProgress } from '@/storage/database';
 import { fontSize, makeStyles, spacing } from '@/theme';
 
 /** Wider than this, the cover sits beside the details (as in the sketch); narrower, above them. */
@@ -21,16 +21,26 @@ export default function ItemScreen() {
   const t = useT();
   const { width } = useWindowDimensions();
   const db = useSQLiteContext();
-  const [chapterCount, setChapterCount] = useState(0);
-  useEffect(() => {
-    let current = true;
-    loadChapters(db, id)
-      .then((chapters) => current && setChapterCount(chapters.length))
-      .catch((error: unknown) => console.warn('Could not load chapters', error));
-    return () => {
-      current = false;
-    };
-  }, [db, id]);
+  const [book, setBook] = useState<{ chapterCount: number; continueAt: string | null }>({
+    chapterCount: 0,
+    continueAt: null,
+  });
+  // Reload whenever the screen comes back into view, e.g. after reading.
+  useFocusEffect(
+    useCallback(() => {
+      let current = true;
+      Promise.all([loadChapters(db, id), loadProgress(db, id)])
+        .then(([chapters, progress]) => {
+          if (!current) return;
+          const at = progress && chapters.find((c) => c.id === progress.chapterId);
+          setBook({ chapterCount: chapters.length, continueAt: at ? at.title : null });
+        })
+        .catch((error: unknown) => console.warn('Could not load chapters', error));
+      return () => {
+        current = false;
+      };
+    }, [db, id]),
+  );
   const item = state.items.find((i) => i.id === id);
   if (!item) return <NotFound what="item" />;
 
@@ -52,11 +62,27 @@ export default function ItemScreen() {
           {item.tags.map((tag) => (
             <Field key={tag.id} name={tag.name} value={tag.value} />
           ))}
-          {chapterCount > 0 && <Text style={styles.chapters}>{t('item.chapters', { count: chapterCount })}</Text>}
+          {book.chapterCount > 0 && (
+            <Text style={styles.chapters}>{t('item.chapters', { count: book.chapterCount })}</Text>
+          )}
         </View>
       </View>
 
       <View style={styles.footer}>
+        {book.chapterCount > 0 && (
+          <View style={styles.readButton}>
+            <Button
+              title={book.continueAt ? t('item.continueReading') : t('item.read')}
+              variant="primary"
+              onPress={() => router.push({ pathname: '/read/[itemId]', params: { itemId: item.id } })}
+            />
+            {book.continueAt && (
+              <Text style={styles.chapters} numberOfLines={1}>
+                {book.continueAt}
+              </Text>
+            )}
+          </View>
+        )}
         <Button
           title={t('common.edit')}
           variant="primary"
@@ -92,5 +118,6 @@ const useStyles = makeStyles((c) => ({
   fieldValue: { fontSize: fontSize.body, color: c.text, lineHeight: 22 },
   fieldEmpty: { color: c.textMuted },
   chapters: { fontSize: fontSize.small, color: c.textMuted },
-  footer: { alignItems: 'flex-end' },
+  footer: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'flex-end', gap: spacing.md },
+  readButton: { flex: 1, gap: spacing.xs },
 }));

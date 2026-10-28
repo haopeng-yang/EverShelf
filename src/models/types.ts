@@ -46,8 +46,11 @@ export interface Chapter {
 export interface ReadingProgress {
   itemId: Id;
   chapterId: Id;
-  /** Scroll position within the chapter, in pixels. */
-  scrollOffset: number;
+  /**
+   * 0-based index of the paragraph at the top of the screen. Stored instead of
+   * a pixel offset so it stays right when the font size changes.
+   */
+  paragraph: number;
   updatedAt: number;
 }
 

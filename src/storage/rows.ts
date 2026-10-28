@@ -38,7 +38,7 @@ export interface ChapterRow {
 export interface ProgressRow {
   item_id: string;
   chapter_id: string;
-  scroll_offset: number;
+  paragraph: number;
   updated_at: number;
 }
 
@@ -117,7 +117,7 @@ export function rowToProgress(row: ProgressRow): ReadingProgress {
   return {
     itemId: row.item_id,
     chapterId: row.chapter_id,
-    scrollOffset: row.scroll_offset,
+    paragraph: row.paragraph,
     updatedAt: row.updated_at,
   };
 }
