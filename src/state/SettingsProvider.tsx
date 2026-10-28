@@ -2,6 +2,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { SORT_ORDERS, type SortOrder } from '@/models/query';
+import { DEFAULT_READER_SETTINGS, parseReaderSettings, type ReaderSettings } from '@/models/readerSettings';
 import { loadSettings, saveSetting } from '@/storage/database';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
@@ -12,14 +13,20 @@ export type ViewMode = 'grid' | 'list';
 /** App language: 'system' follows the phone's language. */
 export type LanguageSetting = 'system' | 'en' | 'zh';
 
-export interface Settings {
+export interface Settings extends ReaderSettings {
   themeMode: ThemeMode;
   sortOrder: SortOrder;
   viewMode: ViewMode;
   language: LanguageSetting;
 }
 
-const DEFAULT_SETTINGS: Settings = { themeMode: 'system', sortOrder: 'newest', viewMode: 'grid', language: 'system' };
+const DEFAULT_SETTINGS: Settings = {
+  themeMode: 'system',
+  sortOrder: 'newest',
+  viewMode: 'grid',
+  language: 'system',
+  ...DEFAULT_READER_SETTINGS,
+};
 
 interface SettingsContextValue {
   settings: Settings;
@@ -45,7 +52,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const setSetting = useCallback(
     <K extends keyof Settings>(key: K, value: Settings[K]) => {
       setSettings((s) => s && { ...s, [key]: value });
-      saveSetting(db, key, value).catch((error: unknown) => console.error('Failed to save setting', key, error));
+      // Stored as text, like every setting; parseSettings turns it back.
+      saveSetting(db, key, String(value)).catch((error: unknown) => console.error('Failed to save setting', key, error));
     },
     [db],
   );
@@ -71,5 +79,6 @@ function parseSettings(stored: Record<string, string>): Settings {
     themeMode: themeModes.find((m) => m === stored.themeMode) ?? DEFAULT_SETTINGS.themeMode,
     sortOrder: SORT_ORDERS.find((o) => o === stored.sortOrder) ?? DEFAULT_SETTINGS.sortOrder,
     viewMode: viewModes.find((m) => m === stored.viewMode) ?? DEFAULT_SETTINGS.viewMode,
+    ...parseReaderSettings(stored),
   };
 }

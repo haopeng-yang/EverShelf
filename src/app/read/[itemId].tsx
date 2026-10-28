@@ -1,18 +1,25 @@
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Text, View, type ListViewToken } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, Text, View, type ListViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { ChapterListSheet } from '@/components/ChapterListSheet';
 import { NotFound } from '@/components/NotFound';
+import { ReaderSettingsSheet } from '@/components/ReaderSettingsSheet';
 import { useT } from '@/i18n/useT';
+import { readerStyle } from '@/models/readerSettings';
 import type { Chapter } from '@/models/types';
+import { useSettings } from '@/state/SettingsProvider';
 import { useShelfState } from '@/state/ShelfProvider';
 import { readChapterText } from '@/storage/bookFiles';
 import { loadChapters, loadProgress, saveProgress } from '@/storage/database';
-import { fontSize, makeStyles, spacing } from '@/theme';
+import { fontSize, makeStyles, spacing, useTheme } from '@/theme';
+
+const KEEP_AWAKE_TAG = 'reader';
 
 /** Wait this long after scrolling stops before saving the reading position. */
 const SAVE_DELAY_MS = 1000;
@@ -39,6 +46,9 @@ export default function ReaderScreen() {
   const [loaded, setLoaded] = useState<LoadedText | null>(null);
   const [controlsVisible, setControlsVisible] = useState(false);
   const [contentsOpen, setContentsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const { settings } = useSettings();
+  const look = readerStyle(settings, useTheme().dark, Platform.OS);
   const chapter = chapters?.[index];
   // Text loaded for an earlier chapter counts as still loading.
   const text: ChapterText = loaded && loaded.chapterId === chapter?.id ? loaded : { status: 'loading' };
@@ -129,6 +139,26 @@ export default function ReaderScreen() {
     return () => save.current();
   }, []);
 
+  // Stop the screen from turning off while reading, if that setting is on.
+  useEffect(() => {
+    if (!settings.readerKeepAwake) return;
+    activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch((error: unknown) => console.warn('Keep awake failed', error));
+    return () => {
+      deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => {});
+    };
+  }, [settings.readerKeepAwake]);
+
+  // A new text size, spacing, margin or font moves every paragraph; scroll the
+  // one being read back to the top of the screen.
+  const layoutKey = `${look.fontSize}|${look.lineHeight}|${look.margin}|${look.fontFamily}`;
+  const lastLayoutKey = useRef(layoutKey);
+  useEffect(() => {
+    if (lastLayoutKey.current === layoutKey) return;
+    lastLayoutKey.current = layoutKey;
+    const paragraph = position.current?.paragraph ?? 0;
+    if (paragraph > 0) requestAnimationFrame(() => listRef.current?.scrollToIndex({ index: paragraph, animated: false }));
+  }, [layoutKey]);
+
   if (!item) return <NotFound what="item" />;
 
   const goTo = (next: number) => {
@@ -140,10 +170,15 @@ export default function ReaderScreen() {
   const toggleControls = () => setControlsVisible((v) => !v);
   const hasPrevious = index > 0;
   const hasNext = chapters !== null && index < chapters.length - 1;
+  const { palette } = look;
+  const textStyle = { fontSize: look.fontSize, lineHeight: look.lineHeight, color: palette.text, fontFamily: look.fontFamily };
+  const mutedStyle = { color: palette.textMuted };
+  const barStyle = { backgroundColor: palette.bar, borderColor: palette.border };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: palette.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
+      <StatusBar style={palette.dark ? 'light' : 'dark'} />
 
       {chapters === null || (chapter && text.status === 'loading') ? (
         <View style={styles.center}>
@@ -151,7 +186,7 @@ export default function ReaderScreen() {
         </View>
       ) : !chapter ? (
         <View style={styles.center}>
-          <Text style={styles.message}>{t('reader.noChapters')}</Text>
+          <Text style={[styles.message, mutedStyle]}>{t('reader.noChapters')}</Text>
           <Button title={t('reader.back')} onPress={() => router.back()} />
         </View>
       ) : (
@@ -160,10 +195,11 @@ export default function ReaderScreen() {
           ref={listRef}
           data={text.status === 'ready' ? text.paragraphs : []}
           keyExtractor={(_, i) => String(i)}
-          contentContainerStyle={[
-            styles.page,
-            { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xl },
-          ]}
+          contentContainerStyle={{
+            paddingHorizontal: look.margin,
+            paddingTop: insets.top + spacing.xl,
+            paddingBottom: insets.bottom + spacing.xl,
+          }}
           initialNumToRender={20}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={VIEWABILITY}
@@ -175,15 +211,19 @@ export default function ReaderScreen() {
             setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, animated: false }), 100);
           }}
           ListHeaderComponent={
-            <Text style={styles.chapterTitle} onPress={toggleControls}>
+            <Text
+              style={[styles.chapterTitle, { color: palette.text, fontFamily: look.fontFamily }]}
+              onPress={toggleControls}>
               {chapter.title}
             </Text>
           }
           ListEmptyComponent={
-            text.status === 'missing' ? <Text style={styles.message}>{t('reader.missingText')}</Text> : undefined
+            text.status === 'missing' ? (
+              <Text style={[styles.message, mutedStyle]}>{t('reader.missingText')}</Text>
+            ) : undefined
           }
           renderItem={({ item: paragraph }) => (
-            <Text style={styles.paragraph} onPress={toggleControls}>
+            <Text style={[styles.paragraph, textStyle]} onPress={toggleControls}>
               {paragraph}
             </Text>
           )}
@@ -192,7 +232,7 @@ export default function ReaderScreen() {
               {hasNext ? (
                 <Button title={t('reader.nextChapter')} variant="primary" onPress={() => goTo(index + 1)} />
               ) : (
-                <Text style={styles.message}>{t('reader.endOfBook')}</Text>
+                <Text style={[styles.message, mutedStyle]}>{t('reader.endOfBook')}</Text>
               )}
             </View>
           }
@@ -201,18 +241,25 @@ export default function ReaderScreen() {
 
       {controlsVisible && chapters && chapter && (
         <>
-          <View style={[styles.bar, styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
+          <View style={[styles.bar, styles.topBar, barStyle, { paddingTop: insets.top + spacing.sm }]}>
             <Button title="←" variant="text" compact accessibilityLabel={t('reader.back')} onPress={() => router.back()} />
             <View style={styles.titles}>
-              <Text style={styles.bookTitle} numberOfLines={1}>
+              <Text style={[styles.bookTitle, { color: palette.text }]} numberOfLines={1}>
                 {item.title}
               </Text>
-              <Text style={styles.barHint} numberOfLines={1}>
+              <Text style={[styles.barHint, mutedStyle]} numberOfLines={1}>
                 {chapter.title}
               </Text>
             </View>
+            <Button
+              title="Aa"
+              variant="text"
+              compact
+              accessibilityLabel={t('readerSettings.title')}
+              onPress={() => setSettingsOpen(true)}
+            />
           </View>
-          <View style={[styles.bar, styles.bottomBar, { paddingBottom: insets.bottom + spacing.sm }]}>
+          <View style={[styles.bar, styles.bottomBar, barStyle, { paddingBottom: insets.bottom + spacing.sm }]}>
             <Button
               title={t('reader.previous')}
               variant="text"
@@ -243,17 +290,19 @@ export default function ReaderScreen() {
           onClose={() => setContentsOpen(false)}
         />
       )}
+      <ReaderSettingsSheet visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </View>
   );
 }
 
-const useStyles = makeStyles((c) => ({
-  container: { flex: 1, backgroundColor: c.background },
+// Colours, text size and margins come from the reader settings (see `look`);
+// these are only the parts that never change.
+const useStyles = makeStyles(() => ({
+  container: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.lg, padding: spacing.xl },
-  message: { fontSize: fontSize.body, color: c.textMuted, textAlign: 'center' },
-  page: { paddingHorizontal: spacing.xl },
-  chapterTitle: { fontSize: fontSize.heading, fontWeight: '700', color: c.text, marginBottom: spacing.xl },
-  paragraph: { fontSize: 18, lineHeight: 30, color: c.text, marginBottom: spacing.md },
+  message: { fontSize: fontSize.body, textAlign: 'center' },
+  chapterTitle: { fontSize: fontSize.heading, fontWeight: '700', marginBottom: spacing.xl },
+  paragraph: { marginBottom: spacing.md },
   endOfChapter: { alignItems: 'center', paddingVertical: spacing.xl * 2 },
   bar: {
     position: 'absolute',
@@ -263,12 +312,10 @@ const useStyles = makeStyles((c) => ({
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    backgroundColor: c.surface,
-    borderColor: c.border,
   },
   topBar: { top: 0, paddingBottom: spacing.sm, borderBottomWidth: 1 },
   bottomBar: { bottom: 0, paddingTop: spacing.sm, borderTopWidth: 1, justifyContent: 'space-between' },
   titles: { flex: 1 },
-  bookTitle: { fontSize: fontSize.body, fontWeight: '600', color: c.text },
-  barHint: { fontSize: fontSize.small, color: c.textMuted },
+  bookTitle: { fontSize: fontSize.body, fontWeight: '600' },
+  barHint: { fontSize: fontSize.small },
 }));
