@@ -145,6 +145,7 @@ describe('SQLite storage', () => {
       now: 5,
     });
 
+    step({ type: 'item/move', itemId: dune.id, shelfId: 'movies' });
     step({ type: 'shelf/remove', shelfId: funny.id });
     step({ type: 'item/remove', itemId: dune.id });
     expect(db.prepare('SELECT COUNT(*) AS n FROM tags').get()).toEqual(expect.objectContaining({ n: 0 }));

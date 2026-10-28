@@ -18,6 +18,8 @@ export interface Settings extends ReaderSettings {
   sortOrder: SortOrder;
   viewMode: ViewMode;
   language: LanguageSetting;
+  /** Whether a shelf shows its "Continue reading" row above the items. */
+  showContinueReading: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -25,6 +27,7 @@ const DEFAULT_SETTINGS: Settings = {
   sortOrder: 'newest',
   viewMode: 'grid',
   language: 'system',
+  showContinueReading: true,
   ...DEFAULT_READER_SETTINGS,
 };
 
@@ -79,6 +82,7 @@ function parseSettings(stored: Record<string, string>): Settings {
     themeMode: themeModes.find((m) => m === stored.themeMode) ?? DEFAULT_SETTINGS.themeMode,
     sortOrder: SORT_ORDERS.find((o) => o === stored.sortOrder) ?? DEFAULT_SETTINGS.sortOrder,
     viewMode: viewModes.find((m) => m === stored.viewMode) ?? DEFAULT_SETTINGS.viewMode,
+    showContinueReading: stored.showContinueReading !== 'false',
     ...parseReaderSettings(stored),
   };
 }

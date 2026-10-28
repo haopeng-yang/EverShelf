@@ -47,6 +47,14 @@ export const en = {
   'home.addItem': '+ Add item',
   'home.addItemTo': 'Add item to {shelf}',
 
+  // Selecting items (long press)
+  'select.count': '{count} selected',
+  'select.move': 'Move',
+  'select.moveTitle': 'Move {count} items to',
+  'select.moveTitle_one': 'Move {count} item to',
+  'select.deleteConfirm': 'Delete {count} items?',
+  'select.deleteConfirm_one': 'Delete “{title}”?',
+
   // Shelf tabs
   'tabs.add': '+ Add',
   'tabs.addShelf': 'Add shelf',
@@ -130,6 +138,9 @@ export const en = {
   'settings.appearanceHint': '“System” follows your phone’s light or dark mode.',
   'settings.language': 'Language',
   'settings.languageHint': '“System” follows your phone’s language.',
+  'settings.shelves': 'Shelves',
+  'settings.showContinueReading': 'Show “Continue reading”',
+  'settings.showContinueReadingHint': 'Books you’re partway through, shown above a shelf’s items.',
   'settings.backup': 'Backup',
   'settings.export': 'Export backup',
   'settings.exporting': 'Exporting…',

@@ -1,7 +1,7 @@
 import { Stack, router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Platform, Text, View, useWindowDimensions } from 'react-native';
+import { BackHandler, FlatList, Platform, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -12,14 +12,16 @@ import { LockedShelf } from '@/components/LockedShelf';
 import { OptionSheet } from '@/components/OptionSheet';
 import { ShelfTabs } from '@/components/ShelfTabs';
 import { TextField } from '@/components/TextField';
+import { confirm } from '@/components/dialogs';
 import { useT } from '@/i18n/useT';
 import { SORT_ORDERS, filterItems, sortItems } from '@/models/query';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
 import type { BookSummary, Id } from '@/models/types';
 import { useSettings } from '@/state/SettingsProvider';
 import { useShelfLocks } from '@/state/ShelfLockProvider';
-import { useShelfState } from '@/state/ShelfProvider';
+import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
 import { loadBookSummaries } from '@/storage/database';
+import { deleteItemFiles } from '@/storage/shelfFiles';
 import { fontSize, makeStyles, spacing } from '@/theme';
 
 const MIN_CARD_WIDTH = 140;
@@ -27,6 +29,7 @@ const CONTINUE_READING_MAX = 10;
 
 export default function ShelvesScreen() {
   const state = useShelfState();
+  const dispatch = useShelfDispatch();
   const { settings, setSetting } = useSettings();
   const styles = useStyles();
   const t = useT();
@@ -36,6 +39,9 @@ export default function ShelvesScreen() {
   const [selectedId, setSelectedId] = useState<Id | undefined>(state.shelves[0]?.id);
   const [query, setQuery] = useState('');
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
+  const [moveSheetOpen, setMoveSheetOpen] = useState(false);
+  // Ids picked by long pressing, and the shelf they were picked on. Null when not selecting.
+  const [picked, setPicked] = useState<{ shelfId: Id; ids: Set<Id> } | null>(null);
 
   // When a shelf is added (always at the end), switch to it.
   const shelfCount = useRef(state.shelves.length);
@@ -83,23 +89,83 @@ export default function ShelvesScreen() {
   const listView = settings.viewMode === 'list';
   const columns = listView ? 1 : Math.max(2, Math.floor((width - spacing.lg * 2) / MIN_CARD_WIDTH));
   const cardWidth = (width - spacing.lg * 2 - spacing.md * (columns - 1)) / columns;
+  // The selection bar splits the width evenly between its three buttons, whatever their labels.
+  const selectionButtonStyle = [styles.selectionButton, { width: (width - spacing.lg * 2 - spacing.sm * 2) / 3 }];
 
   const openItem = (id: Id) => router.push({ pathname: '/item/[id]', params: { id } });
   const editShelf = (shelfId: Id) => router.push({ pathname: '/shelf/edit', params: { id: shelfId } });
+
+  // Switching to another shelf or locking this one ends selection mode.
+  const shelfId = shelf?.id;
+  const selection = shelf && picked?.shelfId === shelf.id && !isLocked(shelf) ? picked.ids : null;
+  const selecting = selection !== null;
+  const clearSelection = () => setPicked(null);
+  // Only items still on this shelf, so a deleted or moved item never lingers in the selection.
+  const selectedItems = useMemo(
+    () => (shelfId && selection ? selectItemsOnShelf(state, shelfId).filter((i) => selection.has(i.id)) : []),
+    [state, shelfId, selection],
+  );
+
+  // Android's back button leaves selection mode instead of the screen.
+  useEffect(() => {
+    if (!selecting) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      setPicked(null);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [selecting]);
+
+  const startSelection = (id: Id) => {
+    if (shelfId) setPicked({ shelfId, ids: new Set([id]) });
+  };
+  const toggleSelected = (id: Id) =>
+    setPicked((current) => {
+      if (!current) return current;
+      const ids = new Set(current.ids);
+      if (ids.has(id)) ids.delete(id);
+      else ids.add(id);
+      // Unpicking the last item leaves selection mode.
+      return ids.size === 0 ? null : { ...current, ids };
+    });
+
+  const pressItem = (id: Id) => (selecting ? toggleSelected(id) : openItem(id));
+
+  async function deleteSelected() {
+    const picked = selectedItems;
+    if (picked.length === 0) return;
+    const ok = await confirm(
+      t('select.deleteConfirm', { count: picked.length, title: picked[0].title }),
+      t('common.cannotUndo'),
+      t('common.delete'),
+      t('common.cancel'),
+    );
+    if (!ok) return;
+    for (const item of picked) void dispatch({ type: 'item/remove', itemId: item.id });
+    deleteItemFiles(picked);
+    clearSelection();
+  }
+
+  function moveSelected(toShelfId: Id) {
+    if (toShelfId === shelfId) return;
+    for (const item of selectedItems) void dispatch({ type: 'item/move', itemId: item.id, shelfId: toShelfId });
+    clearSelection();
+  }
 
   return (
     <View style={styles.container}>
       <Stack.Screen
         options={{
-          title: 'EverShelf',
-          headerRight: () => (
-            <View style={styles.headerButtons}>
-              {shelf && (
-                <Button title={t('home.editShelf')} variant="text" compact onPress={() => editShelf(shelf.id)} />
-              )}
-              <Button title={t('home.settings')} variant="text" compact onPress={() => router.push('/settings')} />
-            </View>
-          ),
+          title: selecting ? t('select.count', { count: selectedItems.length }) : 'EverShelf',
+          headerRight: () =>
+            selecting ? null : (
+              <View style={styles.headerButtons}>
+                {shelf && (
+                  <Button title={t('home.editShelf')} variant="text" compact onPress={() => editShelf(shelf.id)} />
+                )}
+                <Button title={t('home.settings')} variant="text" compact onPress={() => router.push('/settings')} />
+              </View>
+            ),
         }}
       />
 
@@ -169,6 +235,7 @@ export default function ShelvesScreen() {
           <FlatList
             key={listView ? 'list' : columns}
             data={items}
+            extraData={selection}
             numColumns={columns}
             keyExtractor={(item) => item.id}
             keyboardShouldPersistTaps="handled"
@@ -183,40 +250,73 @@ export default function ShelvesScreen() {
               </Text>
             }
             ListHeaderComponent={
-              searching ? undefined : (
+              searching || !settings.showContinueReading ? undefined : (
                 <ContinueReadingRow
                   books={continueReading}
                   onOpen={(item) => router.push({ pathname: '/read/[itemId]', params: { itemId: item.id } })}
                 />
               )
             }
-            renderItem={({ item }) =>
-              listView ? (
-                <ItemRow item={item} book={books.get(item.id)} onPress={() => openItem(item.id)} />
-              ) : (
-                <ItemCard item={item} width={cardWidth} book={books.get(item.id)} onPress={() => openItem(item.id)} />
-              )
-            }
+            renderItem={({ item }) => {
+              const props = {
+                item,
+                book: books.get(item.id),
+                selected: selection ? selection.has(item.id) : undefined,
+                onPress: () => pressItem(item.id),
+                onLongPress: () => (selecting ? toggleSelected(item.id) : startSelection(item.id)),
+              };
+              return listView ? <ItemRow {...props} /> : <ItemCard {...props} width={cardWidth} />;
+            }}
           />
-          <View style={[styles.fabRow, { bottom: insets.bottom + spacing.lg }]}>
-            {/* Book files are stored on the device, which the web version can't do. */}
-            {Platform.OS !== 'web' && (
+          {selecting ? (
+            <View style={[styles.selectionBar, { paddingBottom: insets.bottom + spacing.md }]}>
               <Button
-                title={t('home.importBook')}
-                accessibilityLabel={t('home.importBookTo', { shelf: shelf.name })}
-                style={styles.fab}
-                onPress={() => router.push({ pathname: '/import', params: { shelfId: shelf.id } })}
+                title={t('common.delete')}
+                variant="danger"
+                style={selectionButtonStyle}
+                onPress={() => void deleteSelected()}
               />
-            )}
-            <Button
-              title={t('home.addItem')}
-              variant="primary"
-              accessibilityLabel={t('home.addItemTo', { shelf: shelf.name })}
-              style={styles.fab}
-              onPress={() => router.push({ pathname: '/item/edit', params: { shelfId: shelf.id } })}
-            />
-          </View>
+              <Button
+                title={t('select.move')}
+                variant="primary"
+                disabled={state.shelves.length < 2}
+                style={selectionButtonStyle}
+                onPress={() => setMoveSheetOpen(true)}
+              />
+              <Button title={t('common.cancel')} style={selectionButtonStyle} onPress={clearSelection} />
+            </View>
+          ) : (
+            <View style={[styles.fabRow, { bottom: insets.bottom + spacing.lg }]}>
+              {/* Book files are stored on the device, which the web version can't do. */}
+              {Platform.OS !== 'web' && (
+                <Button
+                  title={t('home.importBook')}
+                  accessibilityLabel={t('home.importBookTo', { shelf: shelf.name })}
+                  style={styles.fab}
+                  onPress={() => router.push({ pathname: '/import', params: { shelfId: shelf.id } })}
+                />
+              )}
+              <Button
+                title={t('home.addItem')}
+                variant="primary"
+                accessibilityLabel={t('home.addItemTo', { shelf: shelf.name })}
+                style={styles.fab}
+                onPress={() => router.push({ pathname: '/item/edit', params: { shelfId: shelf.id } })}
+              />
+            </View>
+          )}
         </>
+      )}
+
+      {shelf && (
+        <OptionSheet
+          visible={moveSheetOpen}
+          title={t('select.moveTitle', { count: selectedItems.length })}
+          options={state.shelves.map((s) => ({ value: s.id, label: s.lock ? `🔒 ${s.name}` : s.name }))}
+          selected={shelf.id}
+          onSelect={moveSelected}
+          onClose={() => setMoveSheetOpen(false)}
+        />
       )}
 
       <OptionSheet
@@ -244,6 +344,16 @@ const useStyles = makeStyles((c) => ({
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.lg },
   emptyText: { fontSize: fontSize.body, color: c.textMuted, textAlign: 'center', marginTop: spacing.xl },
   fabRow: { position: 'absolute', right: spacing.lg, flexDirection: 'row', gap: spacing.sm },
+  selectionBar: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: c.border,
+    backgroundColor: c.background,
+  },
+  selectionButton: { paddingHorizontal: spacing.xs },
   fab: {
     borderRadius: 28,
     shadowColor: '#000',

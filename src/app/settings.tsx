@@ -106,6 +106,20 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.label}>{t('settings.shelves')}</Text>
+        <View style={styles.switchRow}>
+          <View style={styles.switchText}>
+            <Text style={styles.switchLabel}>{t('settings.showContinueReading')}</Text>
+            <Text style={styles.hint}>{t('settings.showContinueReadingHint')}</Text>
+          </View>
+          <Switch
+            value={settings.showContinueReading}
+            onValueChange={(value) => setSetting('showContinueReading', value)}
+          />
+        </View>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.label}>{t('settings.backup')}</Text>
         {/* Books can only be imported on a phone, so the web version has none to include. */}
         {Platform.OS !== 'web' && (

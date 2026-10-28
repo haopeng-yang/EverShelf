@@ -6,6 +6,7 @@ import { fontSize, makeStyles, spacing } from '@/theme';
 
 import { Cover } from './Cover';
 import { ProgressBadge } from './ProgressBadge';
+import { SelectionMark } from './SelectionMark';
 
 /** How many filled-in tags to show under the title. */
 const SUMMARY_TAGS = 2;
@@ -14,23 +15,29 @@ interface ItemRowProps {
   item: Item;
   /** Reading progress, if the item is an imported book. */
   book?: BookSummary;
+  /** Set while the shelf is in selection mode: whether this item is picked. */
+  selected?: boolean;
   onPress: () => void;
+  onLongPress?: () => void;
 }
 
 /** One item in list view: small cover on the left, title and the first few filled-in tags on the right. */
-export function ItemRow({ item, book, onPress }: ItemRowProps) {
+export function ItemRow({ item, book, selected, onPress, onLongPress }: ItemRowProps) {
   const styles = useStyles();
   const t = useT();
   const summary = item.tags.filter((tag) => tag.value.trim()).slice(0, SUMMARY_TAGS);
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={selected === undefined ? 'button' : 'checkbox'}
+      accessibilityState={selected === undefined ? undefined : { checked: selected }}
       accessibilityLabel={item.title}
       onPress={onPress}
+      onLongPress={onLongPress}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
       <View style={styles.cover}>
         <Cover uri={item.coverUri} title={item.title} />
         <ProgressBadge book={book} />
+        {selected !== undefined && <SelectionMark selected={selected} />}
       </View>
       <View style={styles.text}>
         <Text style={styles.title} numberOfLines={1}>

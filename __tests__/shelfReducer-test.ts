@@ -54,6 +54,23 @@ describe('items', () => {
     const next = apply(state, addItem({ id: 'nope', name: 'Nope', defaultTagNames: [] }, 'X'));
     expect(next).toBe(state);
   });
+
+  it('moves an item to another shelf, keeping its tags', () => {
+    let state = createDefaultState();
+    state = apply(state, addItem(booksShelf(state), 'Dune'));
+    const dune = state.items[0];
+    state = apply(state, { type: 'item/move', itemId: dune.id, shelfId: 'movies' });
+    expect(selectItemsOnShelf(state, 'books')).toHaveLength(0);
+    expect(selectItemsOnShelf(state, 'movies')).toEqual([{ ...dune, shelfId: 'movies' }]);
+  });
+
+  it('ignores moves to the same shelf or one that does not exist', () => {
+    let state = createDefaultState();
+    state = apply(state, addItem(booksShelf(state), 'Dune'));
+    const itemId = state.items[0].id;
+    expect(apply(state, { type: 'item/move', itemId, shelfId: 'books' })).toBe(state);
+    expect(apply(state, { type: 'item/move', itemId, shelfId: 'nope' })).toBe(state);
+  });
 });
 
 describe('custom tags', () => {

@@ -18,6 +18,8 @@ export type ShelfAction =
   /** Saves an edited copy of an existing item: its title, cover and whole tag list. */
   | { type: 'item/save'; item: Item; now: number }
   | { type: 'item/remove'; itemId: Id }
+  /** Puts an item on another shelf. Its tags stay as they are. */
+  | { type: 'item/move'; itemId: Id; shelfId: Id }
   | { type: 'tag/add'; itemId: Id; tag: Tag; now: number }
   | { type: 'tag/update'; itemId: Id; tagId: Id; changes: Partial<Pick<Tag, 'name' | 'value'>>; now: number }
   | { type: 'tag/move'; itemId: Id; tagId: Id; toIndex: number; now: number }
@@ -65,6 +67,13 @@ export function shelfReducer(state: ShelfState, action: ShelfAction): ShelfState
 
     case 'item/remove':
       return { ...state, items: state.items.filter((i) => i.id !== action.itemId) };
+
+    case 'item/move': {
+      const item = state.items.find((i) => i.id === action.itemId);
+      if (!item || item.shelfId === action.shelfId) return state;
+      if (!state.shelves.some((s) => s.id === action.shelfId)) return state;
+      return { ...state, items: state.items.map((i) => (i.id === action.itemId ? { ...i, shelfId: action.shelfId } : i)) };
+    }
 
     case 'tag/add':
       return updateItem(state, action.itemId, action.now, (i) => ({ ...i, tags: [...i.tags, action.tag] }));

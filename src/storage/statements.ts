@@ -73,6 +73,9 @@ export function statementsForAction(action: ShelfAction, next: ShelfState): Stat
     case 'item/remove':
       return [{ sql: 'DELETE FROM items WHERE id = ?', params: [action.itemId] }];
 
+    case 'item/move':
+      return [{ sql: 'UPDATE items SET shelf_id = ? WHERE id = ?', params: [action.shelfId, action.itemId] }];
+
     case 'tag/add':
     case 'tag/update':
     case 'tag/move':
