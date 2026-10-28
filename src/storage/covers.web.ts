@@ -28,4 +28,9 @@ export async function writeCoverFromDataUri(dataUri: string): Promise<string> {
   return dataUri;
 }
 
+export async function writeCoverBytes(bytes: Uint8Array, extension: string): Promise<string> {
+  const mime = extension === 'jpg' ? 'jpeg' : extension;
+  return URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: `image/${mime}` }));
+}
+
 export function pruneCovers(_state: ShelfState): void {}

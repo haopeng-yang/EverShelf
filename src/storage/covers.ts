@@ -61,6 +61,14 @@ export async function writeCoverFromDataUri(dataUri: string): Promise<string> {
   return file.uri;
 }
 
+/** Saves image bytes (e.g. a cover found inside an EPUB) into app storage and returns its URI. */
+export async function writeCoverBytes(bytes: Uint8Array, extension: string): Promise<string> {
+  const file = newCoverFile(extension);
+  file.create();
+  await file.write(bytes);
+  return file.uri;
+}
+
 /** Deletes cover files no item uses any more (e.g. after restoring a backup). */
 export function pruneCovers(state: ShelfState): void {
   const directory = coversDirectory();

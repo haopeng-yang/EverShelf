@@ -7,30 +7,34 @@ import { newId } from '../models/ids';
 import type { Chapter, Item, Shelf } from '../models/types';
 import type { ShelfDispatch } from '../state/ShelfProvider';
 import { chapterFileName, deleteBookFiles, writeChapterText } from '../storage/bookFiles';
+import { deleteCover, writeCoverBytes } from '../storage/covers';
 import { saveChapters } from '../storage/database';
 import { decodeText, type TextEncodingName } from './decodeText';
+import { parseEpub, type ParsedEpub } from './parseEpub';
 import type { ParsedChapter } from './parseTxt';
 
-export interface PickedBookFile {
-  name: string;
-  text: string;
-  encoding: TextEncodingName;
-}
+/** A picked file, read but not saved yet. TXT is split later, so the split rule can still change. */
+export type PickedBookFile =
+  | { kind: 'txt'; name: string; text: string; encoding: TextEncodingName }
+  | { kind: 'epub'; name: string; book: ParsedEpub };
 
 export class UnsupportedFileError extends Error {}
 
-/** Opens the system file picker for a .txt file. Null if the user cancels. */
-export async function pickTxtFile(): Promise<PickedBookFile | null> {
-  // Some file managers report .txt files as octet-stream, so accept anything
+/** Opens the system file picker for a .txt or .epub file. Null if the user cancels. */
+export async function pickBookFile(): Promise<PickedBookFile | null> {
+  // Some file managers report book files as octet-stream, so accept anything
   // and check the extension ourselves.
   const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
   if (result.canceled) return null;
   const asset = result.assets[0];
-  if (!/\.txt$/i.test(asset.name)) throw new UnsupportedFileError(asset.name);
+  const extension = /\.(\w+)$/.exec(asset.name)?.[1]?.toLowerCase();
+  if (extension !== 'txt' && extension !== 'epub') throw new UnsupportedFileError(asset.name);
   const file = new File(asset.uri);
   try {
-    const { text, encoding } = decodeText(await file.bytes());
-    return { name: asset.name, text, encoding };
+    const bytes = await file.bytes();
+    if (extension === 'epub') return { kind: 'epub', name: asset.name, book: parseEpub(bytes) };
+    const { text, encoding } = decodeText(bytes);
+    return { kind: 'txt', name: asset.name, text, encoding };
   } finally {
     try {
       // The picker's copy is only needed until it has been read.
@@ -44,9 +48,9 @@ export async function pickTxtFile(): Promise<PickedBookFile | null> {
 export interface BookToSave {
   shelf: Shelf;
   title: string;
-  author: string;
-  /** Name of the tag the author goes in (e.g. "Author" / "作者"). */
-  authorTagName: string;
+  /** Values for tags by name, e.g. { Author: 'Mira Holt' }. Empty values are skipped. */
+  tagValues: Record<string, string>;
+  cover: { bytes: Uint8Array; extension: string } | null;
   chapters: ParsedChapter[];
 }
 
@@ -62,38 +66,43 @@ export async function saveImportedBook(
   onProgress?: (done: number, total: number) => void,
 ): Promise<Item> {
   const draft = newItemDraft(book.shelf, book.title);
-  const author = book.author.trim();
-  const authorTag = draft.tags.find((tag) => tag.name === book.authorTagName);
-  const tags = !author
-    ? draft.tags
-    : authorTag
-      ? draft.tags.map((tag) => (tag === authorTag ? { ...tag, value: author } : tag))
-      : [{ id: newId(), name: book.authorTagName, value: author }, ...draft.tags];
-  const item: Item = { ...draft, tags };
+  let tags = draft.tags;
+  for (const [name, rawValue] of Object.entries(book.tagValues)) {
+    const value = rawValue.trim();
+    if (!value) continue;
+    // Fill the shelf's default tag if it has one with this name; otherwise add it.
+    tags = tags.some((tag) => tag.name === name)
+      ? tags.map((tag) => (tag.name === name ? { ...tag, value } : tag))
+      : [...tags, { id: newId(), name, value }];
+  }
 
   const chapters: Chapter[] = book.chapters.map((chapter, position) => ({
     id: newId(),
-    itemId: item.id,
+    itemId: draft.id,
     position,
     title: chapter.title,
     fileName: chapterFileName(position),
     charCount: chapter.text.length,
   }));
 
+  let coverUri: string | null = null;
   let itemAdded = false;
   try {
+    if (book.cover) coverUri = await writeCoverBytes(book.cover.bytes, book.cover.extension);
     for (const [index, chapter] of chapters.entries()) {
-      await writeChapterText(item.id, chapter.fileName, book.chapters[index].text);
+      await writeChapterText(draft.id, chapter.fileName, book.chapters[index].text);
       onProgress?.(index + 1, chapters.length);
     }
     // Chapters reference the item, so it must be saved first.
+    const item: Item = { ...draft, tags, coverUri };
     itemAdded = true;
     if (!(await dispatch({ type: 'item/add', item }))) throw new Error('Could not save the book');
     await saveChapters(db, item.id, chapters);
     return item;
   } catch (error) {
-    if (itemAdded) void dispatch({ type: 'item/remove', itemId: item.id });
-    deleteBookFiles(item.id);
+    if (itemAdded) void dispatch({ type: 'item/remove', itemId: draft.id });
+    deleteBookFiles(draft.id);
+    deleteCover(coverUri);
     throw error;
   }
 }

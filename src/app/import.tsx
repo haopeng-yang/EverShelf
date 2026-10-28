@@ -4,7 +4,8 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { pickTxtFile, saveImportedBook, UnsupportedFileError, type PickedBookFile } from '@/books/importBook';
+import { pickBookFile, saveImportedBook, UnsupportedFileError, type PickedBookFile } from '@/books/importBook';
+import { EpubError } from '@/books/parseEpub';
 import { CHAPTER_LENGTH, parseTxt, type ParsedChapter, type SplitRule } from '@/books/parseTxt';
 import { Button } from '@/components/Button';
 import { showMessage } from '@/components/dialogs';
@@ -19,8 +20,8 @@ import { fontSize, makeStyles, radius, spacing } from '@/theme';
 const PREVIEW_CHAPTERS = 30;
 
 /**
- * Import a .txt novel onto a shelf: pick a file, check how it was split into
- * chapters, fix the title or author, then save it as a new item.
+ * Import a .txt or .epub book onto a shelf: pick a file, check how it was
+ * split into chapters, fix the title or author, then save it as a new item.
  */
 export default function ImportScreen() {
   const { shelfId } = useLocalSearchParams<{ shelfId: string }>();
@@ -38,25 +39,25 @@ export default function ImportScreen() {
   const [author, setAuthor] = useState('');
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
-  const parsed = useMemo(() => (file ? parseTxt(file.text, file.name, rule) : null), [file, rule]);
-  const chapters = useMemo(() => (parsed ? withTitles(parsed.chapters, t) : []), [parsed, t]);
+  // TXT files are split here, so changing the rule re-splits; EPUBs come with their chapters.
+  const txt = useMemo(() => (file?.kind === 'txt' ? parseTxt(file.text, file.name, rule) : null), [file, rule]);
+  const chapters = useMemo(() => {
+    const raw = file?.kind === 'epub' ? file.book.chapters : (txt?.chapters ?? []);
+    return withTitles(raw, t);
+  }, [file, txt, t]);
 
   async function choose() {
     setPicking(true);
     try {
-      const picked = await pickTxtFile();
+      const picked = await pickBookFile();
       if (!picked) return;
-      const firstParse = parseTxt(picked.text, picked.name, 'headings');
+      const meta = picked.kind === 'epub' ? picked.book : parseTxt(picked.text, picked.name, 'headings');
       setFile(picked);
       setRule('headings');
-      setTitle(firstParse.title);
-      setAuthor(firstParse.author);
+      setTitle(meta.title || picked.name.replace(/\.\w+$/, ''));
+      setAuthor(meta.author);
     } catch (error) {
-      showMessage(
-        error instanceof UnsupportedFileError
-          ? t('import.unsupported', { name: error.message })
-          : t('import.readFailed', { error: String(error) }),
-      );
+      showMessage(errorText(error, t));
     } finally {
       setPicking(false);
     }
@@ -75,7 +76,7 @@ export default function ImportScreen() {
   const saving = progress !== null;
 
   async function save() {
-    if (!shelf || !parsed || saving) return;
+    if (!shelf || !file || saving) return;
     if (!title.trim()) {
       showMessage(t('itemEdit.needTitle'));
       return;
@@ -86,10 +87,17 @@ export default function ImportScreen() {
     }
     setProgress({ done: 0, total: chapters.length });
     try {
+      const epub = file.kind === 'epub' ? file.book : null;
       const item = await saveImportedBook(
         db,
         dispatch,
-        { shelf, title: title.trim(), author, authorTagName: t('tag.author'), chapters },
+        {
+          shelf,
+          title: title.trim(),
+          tagValues: { [t('tag.author')]: author, [t('tag.description')]: epub?.description ?? '' },
+          cover: epub?.cover ?? null,
+          chapters,
+        },
         (done, total) => setProgress({ done, total }),
       );
       router.replace({ pathname: '/item/[id]', params: { id: item.id } });
@@ -105,7 +113,7 @@ export default function ImportScreen() {
         options={{
           title: t('import.title', { shelf: shelf.name }),
           headerRight: () => (
-            <Button title={t('common.save')} variant="text" compact disabled={!parsed || saving} onPress={save} />
+            <Button title={t('common.save')} variant="text" compact disabled={!file || saving} onPress={save} />
           ),
         }}
       />
@@ -115,7 +123,7 @@ export default function ImportScreen() {
           <ActivityIndicator />
           <Text style={styles.hint}>{t('import.saving', { done: progress.done, total: progress.total })}</Text>
         </View>
-      ) : !file || !parsed ? (
+      ) : !file ? (
         <View style={styles.center}>
           {picking ? <ActivityIndicator /> : <Text style={styles.hint}>{t('import.intro')}</Text>}
           <Button title={t('import.chooseFile')} variant="primary" disabled={picking} onPress={choose} />
@@ -125,7 +133,10 @@ export default function ImportScreen() {
           <View style={styles.section}>
             <Text style={styles.label}>{t('import.file')}</Text>
             <Text style={styles.value}>{file.name}</Text>
-            <Text style={styles.hint}>{t('import.encoding', { encoding: file.encoding.toUpperCase() })}</Text>
+            {file.kind === 'txt' && (
+              <Text style={styles.hint}>{t('import.encoding', { encoding: file.encoding.toUpperCase() })}</Text>
+            )}
+            {file.kind === 'epub' && file.book.cover && <Text style={styles.hint}>{t('import.hasCover')}</Text>}
             <Button title={t('import.chooseOther')} compact onPress={choose} style={styles.alignStart} />
           </View>
 
@@ -138,27 +149,29 @@ export default function ImportScreen() {
             <TextField value={author} onChangeText={setAuthor} />
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.label}>{t('import.splitBy')}</Text>
-            <View style={styles.ruleRow}>
-              <Button
-                title={t('import.byHeadings', { count: parsed.headingCount })}
-                variant={parsed.rule === 'headings' ? 'primary' : 'secondary'}
-                compact
-                disabled={parsed.headingCount < 2}
-                onPress={() => setRule('headings')}
-                style={styles.ruleButton}
-              />
-              <Button
-                title={t('import.byLength', { length: CHAPTER_LENGTH.toLocaleString() })}
-                variant={parsed.rule === 'length' ? 'primary' : 'secondary'}
-                compact
-                onPress={() => setRule('length')}
-                style={styles.ruleButton}
-              />
+          {txt && (
+            <View style={styles.section}>
+              <Text style={styles.label}>{t('import.splitBy')}</Text>
+              <View style={styles.ruleRow}>
+                <Button
+                  title={t('import.byHeadings', { count: txt.headingCount })}
+                  variant={txt.rule === 'headings' ? 'primary' : 'secondary'}
+                  compact
+                  disabled={txt.headingCount < 2}
+                  onPress={() => setRule('headings')}
+                  style={styles.ruleButton}
+                />
+                <Button
+                  title={t('import.byLength', { length: CHAPTER_LENGTH.toLocaleString() })}
+                  variant={txt.rule === 'length' ? 'primary' : 'secondary'}
+                  compact
+                  onPress={() => setRule('length')}
+                  style={styles.ruleButton}
+                />
+              </View>
+              {txt.headingCount < 2 && <Text style={styles.hint}>{t('import.noHeadings')}</Text>}
             </View>
-            {parsed.headingCount < 2 && <Text style={styles.hint}>{t('import.noHeadings')}</Text>}
-          </View>
+          )}
 
           <View style={styles.section}>
             <Text style={styles.label}>{t('import.chapters', { count: chapters.length })}</Text>
@@ -189,6 +202,16 @@ function withTitles(chapters: ParsedChapter[], t: Translate): ParsedChapter[] {
     const isOpening = index === 0 && chapters.length > 1 && chapters[1].title !== '';
     return { ...chapter, title: isOpening ? t('import.opening') : t('import.part', { n: index + 1 }) };
   });
+}
+
+function errorText(error: unknown, t: Translate): string {
+  if (error instanceof UnsupportedFileError) return t('import.unsupported', { name: error.message });
+  if (error instanceof EpubError) {
+    if (error.code === 'drm') return t('import.epubDrm');
+    if (error.code === 'noText') return t('import.epubNoText');
+    return t('import.epubInvalid');
+  }
+  return t('import.readFailed', { error: String(error) });
 }
 
 const useStyles = makeStyles((c) => ({
