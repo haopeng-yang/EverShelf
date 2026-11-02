@@ -79,15 +79,15 @@ Shelf types come first. Music needs them so it has a place to live, and they're 
 5. **Restoring a backup** that puts a file on the wrong kind of shelf (a hand-edited or very old file): keep the item and show the same mark. Never drop data.
 6. Translations (English and Simplified Chinese) for the type names and every new message.
 
-## Phase 3 – Shelf screen per type
+## Phase 3 – Shelf screen per type ✅
 
 Opening a shelf shows a layout that fits its type. `src/app/index.tsx` is already large, so split it first.
 
 1. **Refactor**: move the shared parts (tabs, search, sort, selection mode, Move/Delete bar) into `ShelfScreen`. The type-specific part goes in one component per type under `src/components/shelf/`: `CollectionShelf`, `ReadingShelf`, `MusicShelf`.
 2. **Collection**: the current grid/list, unchanged.
-3. **Novels and comics, "reading layout"**: a "Continue reading" row at the top, covers with progress badges, and tapping a book **opens the reader directly**. (Long-press still selects, and the detail screen is still one tap away.) Comic shelves can use taller, manga-shaped covers.
+3. **Novels and comics, "reading layout"**: a "Continue reading" row at the top, covers with progress badges, and tapping a book **opens the reader directly**. Long-press still selects, and with one book selected the bar has a **Details** button. Entries without a file still open their details. (Comic covers keep the same 2:3 shape: it already fits manga volumes.)
 4. **Music**: a placeholder ("Import songs to start"), filled in during Phase 5.
-5. Settings that only mean something for one type (for example the "Continue reading" toggle) move to that type's layout.
+5. The "Continue reading" toggle stays in Settings, since it applies to every novel and comic shelf; its hint now says so.
 
 ✅ **Phases 1–3 make a complete, releasable update on their own** (typed shelves for novels and comics) before any music code exists.
 

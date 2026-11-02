@@ -1,23 +1,24 @@
 import { Stack, router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, FlatList, Platform, Text, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { BackHandler, Platform, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
-import { ContinueReadingRow } from '@/components/ContinueReadingRow';
-import { ItemCard } from '@/components/ItemCard';
-import { ItemRow } from '@/components/ItemRow';
 import { LockedShelf } from '@/components/LockedShelf';
 import { OptionSheet } from '@/components/OptionSheet';
 import { ShelfTabs } from '@/components/ShelfTabs';
+import { CollectionShelf } from '@/components/shelf/CollectionShelf';
+import type { ShelfLayoutProps } from '@/components/shelf/ItemGrid';
+import { MusicShelf } from '@/components/shelf/MusicShelf';
+import { ReadingShelf } from '@/components/shelf/ReadingShelf';
 import { TextField } from '@/components/TextField';
 import { confirm, showMessage } from '@/components/dialogs';
 import { useT } from '@/i18n/useT';
 import { SORT_ORDERS, filterItems, sortItems } from '@/models/query';
 import { misplacedItems, moveTargets } from '@/models/shelfKinds';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
-import type { BookSummary, Id, Item } from '@/models/types';
+import type { BookSummary, Id, Item, ShelfKind } from '@/models/types';
 import { useSettings } from '@/state/SettingsProvider';
 import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
@@ -25,8 +26,13 @@ import { loadBookSummaries } from '@/storage/database';
 import { deleteItemFiles } from '@/storage/shelfFiles';
 import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
-const MIN_CARD_WIDTH = 140;
-const CONTINUE_READING_MAX = 10;
+/** How each kind of shelf looks when it's opened. */
+const LAYOUTS: Record<ShelfKind, (props: ShelfLayoutProps) => ReactElement> = {
+  collection: CollectionShelf,
+  novel: ReadingShelf,
+  comic: ReadingShelf,
+  music: MusicShelf,
+};
 
 export default function ShelvesScreen() {
   const state = useShelfState();
@@ -36,7 +42,6 @@ export default function ShelvesScreen() {
   const t = useT();
   const sortOptions = SORT_ORDERS.map((value) => ({ value, label: t(`sort.${value}`) }));
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const [selectedId, setSelectedId] = useState<Id | undefined>(state.shelves[0]?.id);
   const [query, setQuery] = useState('');
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
@@ -83,24 +88,9 @@ export default function ShelvesScreen() {
   );
   const misplacedIds = useMemo(() => new Set(misplaced.map((i) => i.id)), [misplaced]);
 
-  const continueReading = useMemo(() => {
-    if (!shelf) return [];
-    return selectItemsOnShelf(state, shelf.id)
-      .flatMap((item) => {
-        const book = books.get(item.id);
-        return book && book.lastReadAt !== null && !book.finished ? [{ item, book, at: book.lastReadAt }] : [];
-      })
-      .sort((a, b) => b.at - a.at)
-      .slice(0, CONTINUE_READING_MAX);
-  }, [state, shelf, books]);
-
   const listView = settings.viewMode === 'list';
-  const columns = listView ? 1 : Math.max(2, Math.floor((width - spacing.lg * 2) / MIN_CARD_WIDTH));
-  const cardWidth = (width - spacing.lg * 2 - spacing.md * (columns - 1)) / columns;
-  // The selection bar splits the width evenly between its three buttons, whatever their labels.
-  const selectionButtonStyle = [styles.selectionButton, { width: (width - spacing.lg * 2 - spacing.sm * 2) / 3 }];
 
-  const openItem = (id: Id) => router.push({ pathname: '/item/[id]', params: { id } });
+  const openDetails = (item: Item) => router.push({ pathname: '/item/[id]', params: { id: item.id } });
   const editShelf = (shelfId: Id) => router.push({ pathname: '/shelf/edit', params: { id: shelfId } });
 
   // Switching to another shelf or locking this one ends selection mode.
@@ -137,7 +127,11 @@ export default function ShelvesScreen() {
       return ids.size === 0 ? null : { ...current, ids };
     });
 
-  const pressItem = (id: Id) => (selecting ? toggleSelected(id) : openItem(id));
+  // On a reading shelf, tapping a book opens the reader, so its details are reached from here instead.
+  const detailsItem =
+    shelf && (shelf.kind === 'novel' || shelf.kind === 'comic') && selectedItems.length === 1 && books.has(selectedItems[0].id)
+      ? selectedItems[0]
+      : null;
 
   async function deleteSelected() {
     const picked = selectedItems;
@@ -173,6 +167,8 @@ export default function ShelvesScreen() {
     for (const item of selectedItems) void dispatch({ type: 'item/move', itemId: item.id, shelfId: toShelfId });
     clearSelection();
   }
+
+  const Layout = shelf ? LAYOUTS[shelf.kind] : CollectionShelf;
 
   return (
     <View style={styles.container}>
@@ -254,76 +250,51 @@ export default function ShelvesScreen() {
             </View>
           )}
 
-          <FlatList
-            key={listView ? 'list' : columns}
-            data={items}
-            extraData={selection}
-            numColumns={columns}
-            keyExtractor={(item) => item.id}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            contentContainerStyle={[styles.grid, { paddingBottom: insets.bottom + 96 }]}
-            columnWrapperStyle={columns > 1 ? styles.row : undefined}
-            ListEmptyComponent={
-              <Text style={styles.emptyText}>
-                {searching
-                  ? t('home.noMatches', { shelf: shelf.name, query: query.trim() })
-                  : t('home.empty', { shelf: shelf.name })}
-              </Text>
+          <Layout
+            shelf={shelf}
+            items={items}
+            books={books}
+            query={query.trim()}
+            selection={selection}
+            misplacedIds={misplacedIds}
+            banner={
+              misplaced.length > 0 && !searching && !selecting ? (
+                <View style={styles.banner}>
+                  <Text style={styles.bannerText}>
+                    {t('home.misplaced', { count: misplaced.length, kind: t(`shelfKind.${shelf.kind}`) })}
+                  </Text>
+                  <Button
+                    title={t('home.misplacedMove', { count: misplaced.length })}
+                    variant="primary"
+                    compact
+                    onPress={moveMisplaced}
+                  />
+                </View>
+              ) : null
             }
-            ListHeaderComponent={
-              searching ? undefined : (
-                <>
-                  {misplaced.length > 0 && !selecting && (
-                    <View style={styles.banner}>
-                      <Text style={styles.bannerText}>
-                        {t('home.misplaced', { count: misplaced.length, kind: t(`shelfKind.${shelf.kind}`) })}
-                      </Text>
-                      <Button
-                        title={t('home.misplacedMove', { count: misplaced.length })}
-                        variant="primary"
-                        compact
-                        onPress={moveMisplaced}
-                      />
-                    </View>
-                  )}
-                  {settings.showContinueReading && (
-                    <ContinueReadingRow
-                      books={continueReading}
-                      onOpen={(item) => router.push({ pathname: '/read/[itemId]', params: { itemId: item.id } })}
-                    />
-                  )}
-                </>
-              )
-            }
-            renderItem={({ item }) => {
-              const props = {
-                item,
-                book: books.get(item.id),
-                selected: selection ? selection.has(item.id) : undefined,
-                misplaced: misplacedIds.has(item.id),
-                onPress: () => pressItem(item.id),
-                onLongPress: () => (selecting ? toggleSelected(item.id) : startSelection(item.id)),
-              };
-              return listView ? <ItemRow {...props} /> : <ItemCard {...props} width={cardWidth} />;
-            }}
+            onStartSelection={startSelection}
+            onToggleSelected={toggleSelected}
+            openDetails={openDetails}
           />
           {selecting ? (
             <View style={[styles.selectionBar, { paddingBottom: insets.bottom + spacing.md }]}>
               <Button
                 title={t('common.delete')}
                 variant="danger"
-                style={selectionButtonStyle}
+                style={styles.selectionButton}
                 onPress={() => void deleteSelected()}
               />
               <Button
                 title={t('select.move')}
                 variant="primary"
                 disabled={state.shelves.length < 2}
-                style={selectionButtonStyle}
+                style={styles.selectionButton}
                 onPress={() => openMoveSheet(selectedItems)}
               />
-              <Button title={t('common.cancel')} style={selectionButtonStyle} onPress={clearSelection} />
+              {detailsItem && (
+                <Button title={t('select.details')} style={styles.selectionButton} onPress={() => openDetails(detailsItem)} />
+              )}
+              <Button title={t('common.cancel')} style={styles.selectionButton} onPress={clearSelection} />
             </View>
           ) : (
             <View style={[styles.fabRow, { bottom: insets.bottom + spacing.lg }]}>
@@ -382,8 +353,6 @@ const useStyles = makeStyles((c) => ({
   toolbarButton: { paddingVertical: spacing.sm },
   resultsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg },
   resultsText: { fontSize: fontSize.small, color: c.textMuted },
-  grid: { padding: spacing.lg, gap: spacing.lg },
-  row: { gap: spacing.md },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.lg },
   emptyText: { fontSize: fontSize.body, color: c.textMuted, textAlign: 'center', marginTop: spacing.xl },
   banner: {
@@ -406,7 +375,8 @@ const useStyles = makeStyles((c) => ({
     borderTopColor: c.border,
     backgroundColor: c.background,
   },
-  selectionButton: { paddingHorizontal: spacing.xs },
+  // Buttons share the bar's width evenly, whatever their labels.
+  selectionButton: { flex: 1, minWidth: 0, paddingHorizontal: spacing.xs },
   fab: {
     borderRadius: 28,
     shadowColor: '#000',
