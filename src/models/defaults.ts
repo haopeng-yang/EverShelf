@@ -11,10 +11,10 @@ export function createDefaultState(language: Language = 'en'): ShelfState {
   const description = t('tag.description');
   return {
     shelves: [
-      { id: 'books', name: t('defaults.books'), defaultTagNames: [t('tag.author'), date, description] },
-      { id: 'movies', name: t('defaults.movies'), defaultTagNames: [t('tag.director'), date, description] },
-      { id: 'manga', name: t('defaults.manga'), defaultTagNames: [t('tag.author'), date, description] },
-      { id: 'anime', name: t('defaults.anime'), defaultTagNames: [t('tag.studio'), date, description] },
+      { id: 'books', name: t('defaults.books'), kind: 'novel', defaultTagNames: [t('tag.author'), date, description] },
+      { id: 'movies', name: t('defaults.movies'), kind: 'collection', defaultTagNames: [t('tag.director'), date, description] },
+      { id: 'manga', name: t('defaults.manga'), kind: 'comic', defaultTagNames: [t('tag.author'), date, description] },
+      { id: 'anime', name: t('defaults.anime'), kind: 'collection', defaultTagNames: [t('tag.studio'), date, description] },
     ],
     items: [],
   };

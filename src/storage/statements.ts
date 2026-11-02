@@ -1,8 +1,9 @@
 import type { BackupBook } from '../models/backup';
 import type { ShelfAction } from '../models/shelfReducer';
-import type { BookInfo, Bookmark, Chapter, Id, Item, Page, ReadingProgress, Shelf, ShelfState } from '../models/types';
-import { chapterToRow, itemToRow, pageToRow, shelfToRow, tagToRow } from './rows';
-import { INSERT_BOOKMARK, INSERT_PAGE, SET_FINISHED, UPSERT_BOOK_INFO, UPSERT_PROGRESS } from './schema';
+import { fileKindOfBook, inferShelfKind } from '../models/shelfKinds';
+import type { BookInfo, Bookmark, Chapter, FileKind, Id, Item, Page, ReadingProgress, Shelf, ShelfState } from '../models/types';
+import { chapterToRow, itemToRow, pageToRow, parseBookKind, shelfToRow, tagToRow, type ShelfBookKindRow } from './rows';
+import { INSERT_BOOKMARK, INSERT_PAGE, SET_FINISHED, SET_SHELF_KIND, UPSERT_BOOK_INFO, UPSERT_PROGRESS } from './schema';
 
 export type SqlValue = string | number | null;
 
@@ -155,19 +156,30 @@ export function insertBookmarkStatement(bookmark: Bookmark): Statement {
   };
 }
 
+/** Upgrade to version 9: gives every shelf the kind that fits what's on it. `rows` come from SELECT_SHELF_BOOK_KINDS. */
+export function shelfKindStatements(rows: ShelfBookKindRow[]): Statement[] {
+  const kindsByShelf = new Map<Id, FileKind[]>();
+  for (const row of rows) {
+    const kinds = kindsByShelf.get(row.shelf_id) ?? [];
+    if (row.kind !== null) kinds.push(fileKindOfBook(parseBookKind(row.kind)));
+    kindsByShelf.set(row.shelf_id, kinds);
+  }
+  return [...kindsByShelf].map(([shelfId, kinds]) => ({ sql: SET_SHELF_KIND, params: [inferShelfKind(shelfId, kinds), shelfId] }));
+}
+
 function insertShelf(shelf: Shelf, position: number): Statement {
   const row = shelfToRow(shelf, position);
   return {
-    sql: 'INSERT INTO shelves (id, name, position, default_tag_names, lock_salt, lock_hash) VALUES (?, ?, ?, ?, ?, ?)',
-    params: [row.id, row.name, row.position, row.default_tag_names, row.lock_salt, row.lock_hash],
+    sql: 'INSERT INTO shelves (id, name, kind, position, default_tag_names, lock_salt, lock_hash) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    params: [row.id, row.name, row.kind, row.position, row.default_tag_names, row.lock_salt, row.lock_hash],
   };
 }
 
 function updateShelf(shelf: Shelf, position: number): Statement {
   const row = shelfToRow(shelf, position);
   return {
-    sql: 'UPDATE shelves SET name = ?, position = ?, default_tag_names = ?, lock_salt = ?, lock_hash = ? WHERE id = ?',
-    params: [row.name, row.position, row.default_tag_names, row.lock_salt, row.lock_hash, row.id],
+    sql: 'UPDATE shelves SET name = ?, kind = ?, position = ?, default_tag_names = ?, lock_salt = ?, lock_hash = ? WHERE id = ?',
+    params: [row.name, row.kind, row.position, row.default_tag_names, row.lock_salt, row.lock_hash, row.id],
   };
 }
 

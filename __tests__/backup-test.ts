@@ -1,4 +1,4 @@
-import { addItem, addTag } from '../src/models/actions';
+import { addItem, addShelf, addTag } from '../src/models/actions';
 import { BackupError, backupFileName, createBackup, parseBackup, type BackupBook } from '../src/models/backup';
 import { createDefaultState } from '../src/models/defaults';
 import { shelfReducer } from '../src/models/shelfReducer';
@@ -125,5 +125,46 @@ describe('backup with locked shelves', () => {
 
     const damaged = { ...file, shelves: [{ ...file.shelves[0], lock: { salt: 'x', hash: 1 } }, ...file.shelves.slice(1)] };
     expect(() => parseBackup(JSON.stringify(damaged))).toThrow(BackupError);
+  });
+});
+
+describe('backup with shelf kinds', () => {
+  /** The default shelves, plus "Reading" with one book and an empty "Songs" music shelf. */
+  function stateWithKinds() {
+    let state = createDefaultState();
+    state = shelfReducer(state, addShelf('Reading', [], undefined, 'novel'));
+    state = shelfReducer(state, addShelf('Songs', [], undefined, 'music'));
+    state = shelfReducer(state, addItem(state.shelves[4], 'Emma'));
+    const book: BackupBook = {
+      itemId: state.items[0].id,
+      chapters: [{ id: 'c1', title: 'Chapter 1', text: 'Text.' }],
+      progress: null,
+      bookmarks: [],
+    };
+    return { state, book };
+  }
+
+  it('keeps every shelf’s kind', () => {
+    const { state, book } = stateWithKinds();
+    const parsed = parseBackup(JSON.stringify(createBackup(state, new Map(), new Date(), [book])));
+    expect(parsed.state.shelves).toEqual(state.shelves);
+  });
+
+  it('works out the kinds for a backup made before shelves had them', () => {
+    const { state, book } = stateWithKinds();
+    const file = createBackup(state, new Map(), new Date(), [book]);
+    const old = {
+      ...file,
+      // The first shelf has a kind this version doesn't know, as if from a newer app.
+      shelves: file.shelves.map(({ kind: _kind, ...shelf }, i) => (i === 0 ? { ...shelf, kind: 'hologram' } : shelf)),
+    };
+    expect(parseBackup(JSON.stringify(old)).state.shelves.map((s) => s.kind)).toEqual([
+      'novel', // books, by its id
+      'collection', // movies
+      'comic', // manga
+      'collection', // anime
+      'novel', // Reading, by the book on it
+      'collection', // Songs: empty, and not a built-in shelf
+    ]);
   });
 });

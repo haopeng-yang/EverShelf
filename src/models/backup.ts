@@ -1,10 +1,13 @@
 import { translate } from '../i18n';
-import type { Bookmark, Id, Item, ReadingProgress, Shelf, ShelfState, Tag } from './types';
+import { inferShelfKind, isShelfKind } from './shelfKinds';
+import type { Bookmark, FileKind, Id, Item, ReadingProgress, Shelf, ShelfKind, ShelfState, Tag } from './types';
 
 // A backup is one JSON file holding every shelf and item. Covers are embedded
 // as data URIs ("data:image/jpeg;base64,...") so the file works on another phone.
 // Since version 2 it can also hold imported books: chapter text, reading
 // position and bookmarks. Version 1 files (no books) still restore.
+// Shelves have a `kind` since update 4. It was added without a new version
+// number, because older apps just ignore it, and files without it still restore.
 
 export const BACKUP_FORMAT_VERSION = 2;
 
@@ -129,7 +132,22 @@ export function parseBackup(text: string): ParsedBackup {
   const books = (data.books ?? []).map((raw, i) => parseBook(raw, i + 1, itemIds));
   if (new Set(books.map((b) => b.itemId)).size !== books.length) throw new BackupError('badBook', { n: books.length });
 
-  return { state: { shelves, items }, covers, books };
+  // Shelves from before shelf kinds get the same guess as a database upgrade.
+  // The books in a backup are all novels (comics are backed up as plain items).
+  const shelfOfItem = new Map(items.map((item) => [item.id, item.shelfId]));
+  const typedShelves = shelves.map(
+    (shelf): Shelf => ({
+      ...shelf,
+      kind:
+        shelf.kind ??
+        inferShelfKind(
+          shelf.id,
+          books.filter((b) => shelfOfItem.get(b.itemId) === shelf.id).map((): FileKind => 'novel'),
+        ),
+    }),
+  );
+
+  return { state: { shelves: typedShelves, items }, covers, books };
 }
 
 /**
@@ -181,7 +199,8 @@ function parseBook(raw: unknown, n: number, itemIds: Set<Id>): BackupBook {
   return { itemId: raw.itemId, chapters, progress, bookmarks };
 }
 
-function parseShelf(raw: unknown, n: number): Shelf {
+/** `kind` is left out when the file has none (or one this version doesn't know); parseBackup fills it in. */
+function parseShelf(raw: unknown, n: number): Omit<Shelf, 'kind'> & { kind?: ShelfKind } {
   if (!isObject(raw) || typeof raw.id !== 'string' || typeof raw.name !== 'string') {
     throw new BackupError('badShelf', { n });
   }
@@ -195,6 +214,7 @@ function parseShelf(raw: unknown, n: number): Shelf {
   return {
     id: raw.id,
     name: raw.name,
+    ...(isShelfKind(raw.kind) ? { kind: raw.kind } : {}),
     defaultTagNames: defaults.filter((n): n is string => typeof n === 'string'),
     ...(isObject(lock) ? { lock: { salt: lock.salt as string, hash: lock.hash as string } } : {}),
   };

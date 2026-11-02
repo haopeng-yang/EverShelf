@@ -56,15 +56,15 @@ Shelf types come first. Music needs them so it has a place to live, and they're 
 3. ✅ Install the player: `npx expo install expo-audio` (and its peer `expo-asset`). The plugin in `app.json` turns off the microphone permissions, since EverShelf never records.
 4. Remember the testing notes from the comic work: Expo Go needs `--go`, and the migration step must exist before `SCHEMA_VERSION` goes up (see the version 7 repair).
 
-## Phase 1 – Shelf types: data model
+## Phase 1 – Shelf types: data model ✅
 
 * New type in `src/models/types.ts`: `ShelfKind = 'collection' | 'novel' | 'comic' | 'music'`, and `Shelf.kind`.
 * **Migration V9**: `ALTER TABLE shelves ADD COLUMN kind TEXT`, then fill it in:
   * Built-in shelves by id: `books` → `novel`, `manga` → `comic`, `movies` and `anime` → `collection`.
   * Other shelves by content: only text books → `novel`, only comics → `comic`, no imported files → `collection`, both → the type with the most items (decision 5).
   * Write the inference as a **pure function** (`inferShelfKind(builtInId, bookKinds)`) with tests, and test the migration on a database with novels, comics and a mixed shelf.
-* `createDefaultState` gives new installs typed shelves. Consider adding a built-in **Music** shelf too.
-* **Backup**: write `kind` with each shelf and bump `BACKUP_FORMAT_VERSION`. Older backups have no `kind`, so restoring them runs the same inference.
+* `createDefaultState` gives new installs typed shelves. A built-in **Music** shelf waits for Phase 4, so the app never shows a shelf it can't fill yet.
+* **Backup**: write `kind` with each shelf. `BACKUP_FORMAT_VERSION` stays 2: older apps ignore the new field, and a bump would make them refuse new backups. Backups without a `kind` (or with an unknown one) run the same inference when restored.
 * Add `canHold(shelfKind, fileKind)` in `src/models/`: the one place that says what is allowed where. Every later check goes through it.
 
 ## Phase 2 – Shelf types: enforcing them

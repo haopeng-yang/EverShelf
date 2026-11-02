@@ -51,7 +51,7 @@ describe('items', () => {
 
   it('ignores items for a shelf that does not exist', () => {
     const state = createDefaultState();
-    const next = apply(state, addItem({ id: 'nope', name: 'Nope', defaultTagNames: [] }, 'X'));
+    const next = apply(state, addItem({ id: 'nope', name: 'Nope', kind: 'collection', defaultTagNames: [] }, 'X'));
     expect(next).toBe(state);
   });
 

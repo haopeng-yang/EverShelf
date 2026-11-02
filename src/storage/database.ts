@@ -30,6 +30,7 @@ import {
   type ItemRow,
   type PageRow,
   type ProgressRow,
+  type ShelfBookKindRow,
   type ShelfRow,
   type TagRow,
 } from './rows';
@@ -53,8 +54,10 @@ import {
   SELECT_PAGES,
   SELECT_PROGRESS,
   SELECT_SETTINGS,
+  SELECT_SHELF_BOOK_KINDS,
   SELECT_SHELVES,
   SELECT_TAGS,
+  shelfKindColumn,
   shelfLockRepair,
   UPSERT_SETTING,
 } from './schema';
@@ -65,6 +68,7 @@ import {
   replaceChapters,
   saveComicStatements,
   saveProgressStatement,
+  shelfKindStatements,
   type Statement,
 } from './statements';
 
@@ -103,7 +107,13 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
     if (version < 8) {
       await db.execAsync(MIGRATE_V8);
     }
-    // Future upgrades go here: if (version < 9) { ... }
+    if (version < 9) {
+      const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(shelves)');
+      for (const sql of shelfKindColumn(columns.map((c) => c.name))) await db.execAsync(sql);
+      const rows = await db.getAllAsync<ShelfBookKindRow>(SELECT_SHELF_BOOK_KINDS);
+      for (const s of shelfKindStatements(rows)) await db.runAsync(s.sql, s.params);
+    }
+    // Future upgrades go here: if (version < 10) { ... }
 
     // Seed the starting shelves only on a fresh install, so shelves the user
     // deletes later don't come back. They're named in the phone's language.

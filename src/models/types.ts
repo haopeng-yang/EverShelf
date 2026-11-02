@@ -20,10 +20,21 @@ export interface Item {
   updatedAt: number;
 }
 
+/**
+ * What a shelf holds, which decides which files can be imported onto it and
+ * how it looks when opened. Every kind can also hold manual entries (items
+ * with no file); a 'collection' holds only those, e.g. Movies.
+ */
+export type ShelfKind = 'collection' | 'novel' | 'comic' | 'music';
+
+/** What an imported file is. Each has a shelf kind of the same name that holds it. */
+export type FileKind = 'novel' | 'comic' | 'music';
+
 /** A top tab such as Books or Movies. */
 export interface Shelf {
   id: Id;
   name: string;
+  kind: ShelfKind;
   /** Tag names every new item on this shelf starts with (values left empty). */
   defaultTagNames: string[];
   /** Set when the shelf needs a password to open. Missing for unlocked shelves. */

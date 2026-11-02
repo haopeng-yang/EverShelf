@@ -22,6 +22,7 @@ import {
   type ItemRow,
   type PageRow,
   type ProgressRow,
+  type ShelfBookKindRow,
   type ShelfRow,
   type TagRow,
 } from '../src/storage/rows';
@@ -42,9 +43,11 @@ import {
   SELECT_PAGES,
   SELECT_PROGRESS,
   SELECT_SETTINGS,
+  SELECT_SHELF_BOOK_KINDS,
   SELECT_SHELVES,
   SELECT_TAGS,
   UPSERT_SETTING,
+  shelfKindColumn,
   shelfLockRepair,
 } from '../src/storage/schema';
 import {
@@ -55,6 +58,7 @@ import {
   restoreBookStatements,
   saveComicStatements,
   saveProgressStatement,
+  shelfKindStatements,
   statementsForAction,
   type Statement,
 } from '../src/storage/statements';
@@ -76,6 +80,24 @@ function migrateAll(db: DatabaseSync) {
   db.exec(MIGRATE_V5);
   db.exec(MIGRATE_V6);
   db.exec(MIGRATE_V8);
+  migrateV9(db);
+}
+
+/** Shelves as an app before version 9 saved them, with no kind column. */
+function insertShelvesWithoutKinds(db: DatabaseSync, state: ShelfState) {
+  state.shelves.forEach((s, position) =>
+    db
+      .prepare('INSERT INTO shelves (id, name, position, default_tag_names) VALUES (?, ?, ?, ?)')
+      .run(s.id, s.name, position, JSON.stringify(s.defaultTagNames)),
+  );
+}
+
+/** The version 9 upgrade, as migrate() in database.ts runs it: add the column, then work out each shelf's kind. */
+function migrateV9(db: DatabaseSync) {
+  const columns = db.prepare('PRAGMA table_info(shelves)').all().map((c) => String(c.name));
+  for (const sql of shelfKindColumn(columns)) db.exec(sql);
+  const rows = db.prepare(SELECT_SHELF_BOOK_KINDS).all().map((r) => ({ ...r }) as unknown as ShelfBookKindRow);
+  run(db, shelfKindStatements(rows));
 }
 
 function chapters(itemId: Id, titles: string[]): Chapter[] {
@@ -427,7 +449,7 @@ describe('Comic storage', () => {
     const db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON;');
     for (const sql of [CREATE_TABLES_V1, CREATE_TABLES_V2, CREATE_TABLES_V3, MIGRATE_V4, MIGRATE_V5, MIGRATE_V6]) db.exec(sql);
-    run(db, insertState(createDefaultState()));
+    insertShelvesWithoutKinds(db, createDefaultState());
     const state = dispatch(db, createDefaultState(), addItem(createDefaultState().shelves[0], 'Dune'));
     const itemId = state.items[0].id;
     run(db, replaceChapters(itemId, chapters(itemId, ['One', 'Two'])));
@@ -435,6 +457,7 @@ describe('Comic storage', () => {
 
     db.exec(MIGRATE_V8);
     db.exec(MIGRATE_V8);
+    migrateV9(db);
     expect(load(db)).toEqual(state);
     expect(loadChapters(db, itemId)).toHaveLength(2);
     expect(
@@ -443,6 +466,67 @@ describe('Comic storage', () => {
         .all()
         .map((r) => rowToBookSummary({ ...r } as unknown as BookSummaryRow)),
     ).toEqual([{ itemId, kind: 'text', chapterCount: 2, percent: 0.6, lastReadAt: 3, finished: false }]);
+  });
+});
+
+describe('Shelf kinds', () => {
+  it('saves a new shelf with its kind', () => {
+    const db = openTestDb();
+    const state = dispatch(db, createDefaultState(), addShelf('Songs', [], undefined, 'music'));
+    expect(load(db)).toEqual(state);
+    expect(load(db).shelves.at(-1)!.kind).toBe('music');
+  });
+
+  it('upgrading to version 9 gives each shelf the kind of what is on it, and can run twice', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec('PRAGMA foreign_keys = ON;');
+    for (const sql of [CREATE_TABLES_V1, CREATE_TABLES_V2, CREATE_TABLES_V3, MIGRATE_V4, MIGRATE_V5, MIGRATE_V6, MIGRATE_V8]) {
+      db.exec(sql);
+    }
+    let state: ShelfState = {
+      shelves: [
+        ...createDefaultState().shelves,
+        ...['Novels', 'Mixed', 'Wishlist'].map((name) => ({ id: name.toLowerCase(), name, kind: 'collection' as const, defaultTagNames: [] })),
+      ],
+      items: [],
+    };
+    insertShelvesWithoutKinds(db, state);
+    const shelf = (id: string) => state.shelves.find((s) => s.id === id)!;
+    /** Adds an item, and makes it a novel or comic unless kind is null. */
+    const add = (shelfId: string, title: string, kind: 'text' | 'comic' | null) => {
+      state = dispatch(db, state, addItem(shelf(shelfId), title));
+      const itemId = state.items.at(-1)!.id;
+      if (kind === 'text') run(db, replaceChapters(itemId, chapters(itemId, ['One'])));
+      if (kind === 'comic') run(db, saveComicStatements({ itemId, kind: 'comic', readingMode: 'ltr' }, chapters(itemId, ['One']), []));
+    };
+    add('movies', 'Dune (manual entry)', null);
+    add('manga', 'Dune (the novel)', 'text');
+    add('novels', 'Emma', 'text');
+    add('mixed', 'Akira', 'comic');
+    add('mixed', 'Monster', 'comic');
+    add('mixed', 'Emma', 'text');
+    add('wishlist', 'Something', null);
+
+    migrateV9(db);
+    migrateV9(db);
+    expect(Object.fromEntries(load(db).shelves.map((s) => [s.id, s.kind]))).toEqual({
+      books: 'novel',
+      movies: 'collection',
+      // Files win over the built-in kind.
+      manga: 'novel',
+      anime: 'collection',
+      novels: 'novel',
+      mixed: 'comic',
+      wishlist: 'collection',
+    });
+    // Nothing else changes, and every item stays where it was.
+    expect(load(db).items).toEqual(state.items);
+  });
+
+  it('an unknown stored kind loads as a collection', () => {
+    const db = openTestDb();
+    db.prepare("UPDATE shelves SET kind = 'hologram' WHERE id = 'books'").run();
+    expect(load(db).shelves[0].kind).toBe('collection');
   });
 });
 
@@ -474,7 +558,9 @@ describe('Shelf locks', () => {
     db.exec(MIGRATE_V4);
     db.exec(MIGRATE_V5);
     db.exec(MIGRATE_V6);
-    expect(load(db).shelves).toEqual([{ id: 'old', name: 'Old', defaultTagNames: [] }]);
+    db.exec(MIGRATE_V8);
+    migrateV9(db);
+    expect(load(db).shelves).toEqual([{ id: 'old', name: 'Old', kind: 'collection', defaultTagNames: [] }]);
   });
 
   it('repairs a database marked version 6 that is missing the lock columns', () => {
@@ -489,7 +575,9 @@ describe('Shelf locks', () => {
     const columns = () => db.prepare('PRAGMA table_info(shelves)').all().map((c) => String(c.name));
 
     for (const sql of shelfLockRepair(columns())) db.exec(sql);
-    expect(load(db).shelves).toEqual([{ id: 's', name: 'Shelf', defaultTagNames: [] }]);
+    db.exec(MIGRATE_V8);
+    migrateV9(db);
+    expect(load(db).shelves).toEqual([{ id: 's', name: 'Shelf', kind: 'collection', defaultTagNames: [] }]);
     // On a database that already has them, it does nothing.
     expect(shelfLockRepair(columns())).toEqual([]);
   });

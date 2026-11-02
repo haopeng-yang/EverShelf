@@ -2,7 +2,7 @@
 // run the same SQL against Node's built-in SQLite.
 
 /** Bump this and add a step in database.ts `migrate` whenever the tables change. */
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export const CREATE_TABLES_V1 = `
 CREATE TABLE shelves (
@@ -128,6 +128,26 @@ CREATE TABLE IF NOT EXISTS pages (
 );
 `;
 
+/**
+ * Version 9: every shelf has a kind (collection, novel, comic or music). Given
+ * the shelves table's column names, returns the statement that adds the
+ * column if it's missing, so a half-applied upgrade can run again (see the
+ * version 7 note). database.ts then works out each shelf's kind from what's
+ * on it, with SELECT_SHELF_BOOK_KINDS and shelfKindStatements.
+ */
+export function shelfKindColumn(existingColumns: string[]): string[] {
+  return existingColumns.includes('kind') ? [] : ["ALTER TABLE shelves ADD COLUMN kind TEXT NOT NULL DEFAULT 'collection'"];
+}
+
+/** Every shelf, with the kind of each imported book on it: one row per book, or one row with a null kind if it has none. */
+export const SELECT_SHELF_BOOK_KINDS = `
+SELECT s.id AS shelf_id, CASE WHEN c.item_id IS NULL THEN NULL ELSE COALESCE(b.kind, 'text') END AS kind
+FROM shelves s
+LEFT JOIN items i ON i.shelf_id = s.id
+LEFT JOIN (SELECT DISTINCT item_id FROM chapters) c ON c.item_id = i.id
+LEFT JOIN book_info b ON b.item_id = i.id`;
+export const SET_SHELF_KIND = 'UPDATE shelves SET kind = ? WHERE id = ?';
+
 /** One row per book (item with chapters), with its kind and its progress if it has been opened. */
 export const SELECT_BOOK_SUMMARIES = `
 SELECT c.item_id, COUNT(*) AS chapter_count, COALESCE(b.kind, 'text') AS kind,
@@ -169,7 +189,7 @@ export const UPSERT_SETTING =
   'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value';
 
 export const SELECT_SHELVES =
-  'SELECT id, name, position, default_tag_names, lock_salt, lock_hash FROM shelves ORDER BY position, rowid';
+  'SELECT id, name, kind, position, default_tag_names, lock_salt, lock_hash FROM shelves ORDER BY position, rowid';
 export const SELECT_ITEMS =
   'SELECT id, shelf_id, title, cover_uri, created_at, updated_at FROM items ORDER BY created_at, rowid';
 export const SELECT_TAGS = 'SELECT id, item_id, name, value, position FROM tags ORDER BY item_id, position';

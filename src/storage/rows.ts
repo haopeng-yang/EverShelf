@@ -1,3 +1,4 @@
+import { isShelfKind } from '../models/shelfKinds';
 import {
   DEFAULT_READING_MODE,
   type BookInfo,
@@ -19,11 +20,18 @@ import {
 export interface ShelfRow {
   id: string;
   name: string;
+  kind: string;
   position: number;
   default_tag_names: string;
   /** Both set for a locked shelf, both null otherwise. */
   lock_salt: string | null;
   lock_hash: string | null;
+}
+
+/** A row of SELECT_SHELF_BOOK_KINDS: kind is null for a shelf with no books. */
+export interface ShelfBookKindRow {
+  shelf_id: string;
+  kind: string | null;
 }
 
 export interface ItemRow {
@@ -106,6 +114,7 @@ export function rowsToState(shelfRows: ShelfRow[], itemRows: ItemRow[], tagRows:
   const shelves: Shelf[] = shelfRows.map((row) => ({
     id: row.id,
     name: row.name,
+    kind: isShelfKind(row.kind) ? row.kind : 'collection',
     defaultTagNames: parseStringArray(row.default_tag_names),
     ...(row.lock_salt && row.lock_hash ? { lock: { salt: row.lock_salt, hash: row.lock_hash } } : {}),
   }));
@@ -129,6 +138,7 @@ export function shelfToRow(shelf: Shelf, position: number): ShelfRow {
   return {
     id: shelf.id,
     name: shelf.name,
+    kind: shelf.kind,
     position,
     default_tag_names: JSON.stringify(shelf.defaultTagNames),
     lock_salt: shelf.lock?.salt ?? null,
@@ -232,7 +242,7 @@ export function rowToPage(row: PageRow): Page {
 }
 
 // Values written by a newer version of the app fall back to the defaults.
-function parseBookKind(value: string): BookKind {
+export function parseBookKind(value: string): BookKind {
   return value === 'comic' ? 'comic' : 'text';
 }
 
