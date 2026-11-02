@@ -2,7 +2,7 @@
 // run the same SQL against Node's built-in SQLite.
 
 /** Bump this and add a step in database.ts `migrate` whenever the tables change. */
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 export const CREATE_TABLES_V1 = `
 CREATE TABLE shelves (
@@ -147,6 +147,41 @@ LEFT JOIN items i ON i.shelf_id = s.id
 LEFT JOIN (SELECT DISTINCT item_id FROM chapters) c ON c.item_id = i.id
 LEFT JOIN book_info b ON b.item_id = i.id`;
 export const SET_SHELF_KIND = 'UPDATE shelves SET kind = ? WHERE id = ?';
+
+/**
+ * Version 10: songs. tracks says which items are songs and how the file is
+ * stored; title, artist and album stay the item's title and tags, so the
+ * user can edit them. playback_progress is where a song was stopped and how
+ * often it's been played. Both go away with their item.
+ */
+export const MIGRATE_V10 = `
+CREATE TABLE IF NOT EXISTS tracks (
+  item_id TEXT PRIMARY KEY NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  file_name TEXT NOT NULL,
+  format TEXT NOT NULL,
+  duration_ms INTEGER,
+  track_number INTEGER,
+  disc_number INTEGER,
+  lyrics TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS playback_progress (
+  item_id TEXT PRIMARY KEY NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  position_ms INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  play_count INTEGER NOT NULL DEFAULT 0,
+  last_played_at INTEGER
+);
+`;
+
+export const SELECT_TRACK = 'SELECT item_id, file_name, format, duration_ms, track_number, disc_number, lyrics FROM tracks WHERE item_id = ?';
+export const INSERT_TRACK = `INSERT INTO tracks (item_id, file_name, format, duration_ms, track_number, disc_number, lyrics)
+VALUES (?, ?, ?, ?, ?, ?, ?)`;
+/** What kind of file every item with one is: a book (text or comic) or a song. */
+export const SELECT_FILE_KINDS = `
+SELECT DISTINCT c.item_id, COALESCE(b.kind, 'text') AS kind
+FROM chapters c LEFT JOIN book_info b ON b.item_id = c.item_id
+UNION ALL
+SELECT item_id, 'music' AS kind FROM tracks`;
 
 /** One row per book (item with chapters), with its kind and its progress if it has been opened. */
 export const SELECT_BOOK_SUMMARIES = `

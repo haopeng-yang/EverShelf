@@ -96,6 +96,23 @@ export interface Page {
   height: number;
 }
 
+/** How a song file is stored. Title, artist and album are the item's title and tags, so the user can edit them. */
+export type AudioFormat = 'mp3' | 'm4a' | 'flac' | 'wav' | 'aac';
+
+/** An imported song, stored at books/<itemId>/<fileName>. */
+export interface Track {
+  itemId: Id;
+  fileName: string;
+  format: AudioFormat;
+  /** Null until known: some files don't say, and the player finds out on first play. */
+  durationMs: number | null;
+  /** From the file's tags, for album order. */
+  trackNumber: number | null;
+  discNumber: number | null;
+  /** Plain lyrics from the file's tags, or ''. */
+  lyrics: string;
+}
+
 /** Where the user stopped reading a book. */
 export interface ReadingProgress {
   itemId: Id;

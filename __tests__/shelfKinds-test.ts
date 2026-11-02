@@ -10,7 +10,7 @@ import {
   moveTargets,
 } from '../src/models/shelfKinds';
 import { shelfReducer } from '../src/models/shelfReducer';
-import type { BookKind, BookSummary, Id } from '../src/models/types';
+import type { FileKind, Id } from '../src/models/types';
 
 describe('canHold', () => {
   it('only lets files onto a shelf of the same kind', () => {
@@ -73,17 +73,9 @@ describe('shelves and their items', () => {
     const [books] = state.shelves;
     for (const title of ['Dune', 'Akira', 'Wishlist book']) state = shelfReducer(state, addItem(books, title));
     const [dune, akira, wish] = state.items;
-    const summary = (itemId: Id, kind: BookKind): BookSummary => ({
-      itemId,
-      kind,
-      chapterCount: 1,
-      percent: 0,
-      lastReadAt: null,
-      finished: false,
-    });
-    const summaries = new Map([
-      [dune.id, summary(dune.id, 'text')],
-      [akira.id, summary(akira.id, 'comic')],
+    const summaries = new Map<Id, FileKind>([
+      [dune.id, 'novel'],
+      [akira.id, 'comic'],
     ]);
     return { state, books, dune, akira, wish, summaries };
   }
@@ -98,7 +90,8 @@ describe('shelves and their items', () => {
     const { state, dune, akira, wish, summaries } = library();
     const ids = (items: typeof state.items) => moveTargets(state.shelves, 'books', items, summaries).map((s) => s.id);
     expect(ids([akira])).toEqual(['manga']);
-    expect(ids([wish])).toEqual(['movies', 'manga', 'anime']);
+    expect(ids([wish])).toEqual(['movies', 'manga', 'anime', 'music']);
+    expect(ids([akira, wish])).toEqual(['manga']);
     expect(ids([dune, wish])).toEqual([]);
     expect(ids([dune, akira])).toEqual([]);
   });

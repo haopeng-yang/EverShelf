@@ -20,9 +20,10 @@ import {
   type ComicInfo,
   type PlannedChapter,
 } from './comic/parseComic';
-import { readZipEntries, readZipEntry, type ByteSource, type ZipEntry } from './comic/zip';
+import { readZipEntries, readZipEntry, type ZipEntry } from './comic/zip';
 import { decodeText } from './decodeText';
 import { hasExtension } from './detectFormat';
+import { deleteQuietly, openReadable, withSource } from './pickedFiles';
 
 // Imports .cbz/.zip comics. Unlike novels, a comic file is never read into
 // memory whole: each page is read from the file, written to its own image
@@ -196,7 +197,7 @@ export async function zipEntryNames(file: File): Promise<string[]> {
 
 async function openComicFile(file: File, pickedIsCopy = false): Promise<ComicFile> {
   const name = hasExtension(file.name) ? file.name : '';
-  const opened = await openReadable(file);
+  const opened = await openReadable(file, 'comic', 'zip');
   // A cache copy of an app-owned copy: only the cache copy is needed from here on.
   if (opened.temporary && pickedIsCopy) deleteQuietly(file);
   const temporary = opened.temporary || pickedIsCopy;
@@ -206,40 +207,6 @@ async function openComicFile(file: File, pickedIsCopy = false): Promise<ComicFil
   } catch (error) {
     if (temporary) deleteQuietly(opened.file);
     throw error;
-  }
-}
-
-/**
- * Makes sure the file can be opened for reading at any offset. Some Android
- * providers refuse that for content links; those are copied to the cache first.
- */
-async function openReadable(file: File): Promise<{ file: File; temporary: boolean }> {
-  try {
-    file.open().close();
-    return { file, temporary: false };
-  } catch (error) {
-    console.warn('Could not open the comic directly, copying it first', file.uri, error);
-    const copy = new File(Paths.cache, `comic-${newId()}.zip`);
-    await file.copy(copy);
-    return { file: copy, temporary: true };
-  }
-}
-
-/** Opens the file, runs `work` with a ByteSource over it, and closes it again. */
-async function withSource<T>(file: File, work: (source: ByteSource) => Promise<T>): Promise<T> {
-  const handle = file.open();
-  try {
-    const source: ByteSource = {
-      size: handle.size ?? file.size,
-      read: async (offset, length) => {
-        // One read at a time: the handle has a single position.
-        handle.offset = offset;
-        return handle.readBytes(length);
-      },
-    };
-    return await work(source);
-  } finally {
-    handle.close();
   }
 }
 
@@ -255,12 +222,4 @@ async function readPage(files: ComicFile[], page: { source: number; name: string
 
 function disposeFiles(files: ComicFile[]): void {
   for (const f of files) if (f.temporary) deleteQuietly(f.file);
-}
-
-function deleteQuietly(file: File): void {
-  try {
-    if (file.exists) file.delete();
-  } catch (error) {
-    console.warn('Could not delete a temporary comic copy', file.uri, error);
-  }
 }

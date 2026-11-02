@@ -12,8 +12,8 @@ function booksShelf(state: ShelfState) {
 }
 
 describe('shelves', () => {
-  it('starts with Books, Movies, Manga, Anime', () => {
-    expect(createDefaultState().shelves.map((s) => s.name)).toEqual(['Books', 'Movies', 'Manga', 'Anime']);
+  it('starts with Books, Movies, Manga, Anime, Music', () => {
+    expect(createDefaultState().shelves.map((s) => s.name)).toEqual(['Books', 'Movies', 'Manga', 'Anime', 'Music']);
   });
 
   it('adds a new shelf at the end', () => {
@@ -24,7 +24,7 @@ describe('shelves', () => {
   it('renames and reorders shelves', () => {
     let state = apply(createDefaultState(), { type: 'shelf/rename', shelfId: 'anime', name: 'Anime Series' });
     state = apply(state, { type: 'shelf/move', shelfId: 'anime', toIndex: 0 });
-    expect(state.shelves.map((s) => s.name)).toEqual(['Anime Series', 'Books', 'Movies', 'Manga']);
+    expect(state.shelves.map((s) => s.name)).toEqual(['Anime Series', 'Books', 'Movies', 'Manga', 'Music']);
   });
 
   it('removing a shelf removes its items too', () => {

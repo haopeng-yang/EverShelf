@@ -9,11 +9,13 @@ import {
   type Bookmark,
   type BookSummary,
   type Chapter,
+  type FileKind,
   type Id,
   type Page,
   type ReadingMode,
   type ReadingProgress,
   type ShelfState,
+  type Track,
 } from '../models/types';
 import {
   rowsToState,
@@ -23,16 +25,20 @@ import {
   rowToChapter,
   rowToPage,
   rowToProgress,
+  rowToFileKind,
+  rowToTrack,
   type BookInfoRow,
   type BookmarkRow,
   type BookSummaryRow,
   type ChapterRow,
+  type FileKindRow,
   type ItemRow,
   type PageRow,
   type ProgressRow,
   type ShelfBookKindRow,
   type ShelfRow,
   type TagRow,
+  type TrackRow,
 } from './rows';
 import {
   CREATE_TABLES_V1,
@@ -43,6 +49,7 @@ import {
   MIGRATE_V5,
   MIGRATE_V6,
   MIGRATE_V8,
+  MIGRATE_V10,
   SCHEMA_VERSION,
   SET_READING_MODE,
   SELECT_BOOK_INFO,
@@ -50,6 +57,7 @@ import {
   SELECT_BOOK_SUMMARIES,
   SELECT_BOOKMARKS,
   SELECT_CHAPTERS,
+  SELECT_FILE_KINDS,
   SELECT_ITEMS,
   SELECT_PAGES,
   SELECT_PROGRESS,
@@ -57,6 +65,7 @@ import {
   SELECT_SHELF_BOOK_KINDS,
   SELECT_SHELVES,
   SELECT_TAGS,
+  SELECT_TRACK,
   shelfKindColumn,
   shelfLockRepair,
   UPSERT_SETTING,
@@ -64,6 +73,7 @@ import {
 import {
   finishedStatements,
   insertBookmarkStatement,
+  insertTrackStatement,
   insertState,
   replaceChapters,
   saveComicStatements,
@@ -113,7 +123,10 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
       const rows = await db.getAllAsync<ShelfBookKindRow>(SELECT_SHELF_BOOK_KINDS);
       for (const s of shelfKindStatements(rows)) await db.runAsync(s.sql, s.params);
     }
-    // Future upgrades go here: if (version < 10) { ... }
+    if (version < 10) {
+      await db.execAsync(MIGRATE_V10);
+    }
+    // Future upgrades go here: if (version < 11) { ... }
 
     // Seed the starting shelves only on a fresh install, so shelves the user
     // deletes later don't come back. They're named in the phone's language.
@@ -159,6 +172,23 @@ export async function saveChapters(db: SQLiteDatabase, itemId: Id, chapters: Cha
 export async function loadBookItemIds(db: SQLiteDatabase): Promise<Set<Id>> {
   const rows = await db.getAllAsync<{ item_id: string }>(SELECT_BOOK_ITEM_IDS);
   return new Set(rows.map((r) => r.item_id));
+}
+
+/** What kind of file each item with one is (novel, comic or song). Manual entries aren't in the map. */
+export async function loadFileKinds(db: SQLiteDatabase): Promise<Map<Id, FileKind>> {
+  const rows = await db.getAllAsync<FileKindRow>(SELECT_FILE_KINDS);
+  return new Map(rows.map((row) => [row.item_id, rowToFileKind(row)]));
+}
+
+/** A song's stored file and track info, or null if the item isn't a song. */
+export async function loadTrack(db: SQLiteDatabase, itemId: Id): Promise<Track | null> {
+  const row = await db.getFirstAsync<TrackRow>(SELECT_TRACK, [itemId]);
+  return row ? rowToTrack(row) : null;
+}
+
+export async function saveTrack(db: SQLiteDatabase, track: Track): Promise<void> {
+  const s = insertTrackStatement(track);
+  await db.runAsync(s.sql, s.params);
 }
 
 /** Whether a book is text or a comic, and how a comic is read. Books with nothing stored are text. */

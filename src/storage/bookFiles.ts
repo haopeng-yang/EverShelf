@@ -4,8 +4,10 @@ import type { Id } from '../models/types';
 
 // Chapter text is stored as one UTF-8 file per chapter in
 // <documents>/books/<itemId>/, so the database stays small and a long book
-// never has to be loaded into memory all at once. bookFiles.web.ts is used on
-// web instead, where there is no file system.
+// never has to be loaded into memory all at once. Comic pages and song files
+// live in the same per-item folder, so deleting an item, and the cleanup after
+// a restore, cover them too. bookFiles.web.ts is used on web instead, where
+// there is no file system.
 
 function booksDirectory(): Directory {
   return new Directory(Paths.document, 'books');
@@ -52,6 +54,35 @@ function pageFile(itemId: Id, fileName: string): { folder: Directory; file: File
   if (!match) return null;
   const folder = new Directory(bookDirectory(itemId), match[1]);
   return { folder, file: new File(folder, match[2]) };
+}
+
+/** File name of a song in its item's folder, e.g. "song.flac". */
+export function songFileName(extension: string): string {
+  return `song.${extension.toLowerCase()}`;
+}
+
+function songFile(itemId: Id, fileName: string): File {
+  // Names come from the database (and maybe backups later): only song.<ext>.
+  if (!/^song.[a-z0-9]{1,5}$/.test(fileName)) throw new Error(`Invalid song file name: ${fileName}`);
+  return new File(bookDirectory(itemId), fileName);
+}
+
+/**
+ * Puts a picked song into its item's folder. A temporary copy (one the app
+ * made, or iOS's copy of the pick) is moved; the user's own file is copied.
+ * Either way the native side does it, so the song never passes through memory.
+ */
+export async function storeSongFile(itemId: Id, fileName: string, from: File, temporary: boolean): Promise<void> {
+  const directory = bookDirectory(itemId);
+  directory.create({ idempotent: true, intermediates: true });
+  const destination = songFile(itemId, fileName);
+  if (temporary) await from.move(destination, { overwrite: true });
+  else await from.copy(destination, { overwrite: true });
+}
+
+/** The stored song's file URI, for the player. */
+export function songUri(itemId: Id, fileName: string): string {
+  return songFile(itemId, fileName).uri;
 }
 
 /** Writes (or overwrites) one chapter's text. */

@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { addItem, addShelf, addTag } from '../src/models/actions';
 import { createDefaultState } from '../src/models/defaults';
 import { shelfReducer, type ShelfAction } from '../src/models/shelfReducer';
-import type { BookInfo, Chapter, Id, Page, ShelfState } from '../src/models/types';
+import type { BookInfo, Chapter, Id, Page, ShelfState, Track } from '../src/models/types';
 import {
   rowsToState,
   rowToBookInfo,
@@ -15,16 +15,20 @@ import {
   rowToChapter,
   rowToPage,
   rowToProgress,
+  rowToFileKind,
+  rowToTrack,
   type BookInfoRow,
   type BookmarkRow,
   type BookSummaryRow,
   type ChapterRow,
+  type FileKindRow,
   type ItemRow,
   type PageRow,
   type ProgressRow,
   type ShelfBookKindRow,
   type ShelfRow,
   type TagRow,
+  type TrackRow,
 } from '../src/storage/rows';
 import {
   CREATE_TABLES_V1,
@@ -34,11 +38,13 @@ import {
   MIGRATE_V5,
   MIGRATE_V6,
   MIGRATE_V8,
+  MIGRATE_V10,
   SELECT_BOOK_INFO,
   SELECT_BOOK_ITEM_IDS,
   SELECT_BOOK_SUMMARIES,
   SELECT_BOOKMARKS,
   SELECT_CHAPTERS,
+  SELECT_FILE_KINDS,
   SELECT_ITEMS,
   SELECT_PAGES,
   SELECT_PROGRESS,
@@ -46,6 +52,7 @@ import {
   SELECT_SHELF_BOOK_KINDS,
   SELECT_SHELVES,
   SELECT_TAGS,
+  SELECT_TRACK,
   UPSERT_SETTING,
   shelfKindColumn,
   shelfLockRepair,
@@ -53,6 +60,7 @@ import {
 import {
   finishedStatements,
   insertBookmarkStatement,
+  insertTrackStatement,
   insertState,
   replaceChapters,
   restoreBookStatements,
@@ -81,6 +89,7 @@ function migrateAll(db: DatabaseSync) {
   db.exec(MIGRATE_V6);
   db.exec(MIGRATE_V8);
   migrateV9(db);
+  db.exec(MIGRATE_V10);
 }
 
 /** Shelves as an app before version 9 saved them, with no kind column. */
@@ -518,6 +527,7 @@ describe('Shelf kinds', () => {
       // Files win over the built-in kind.
       manga: 'novel',
       anime: 'collection',
+      music: 'music',
       novels: 'novel',
       mixed: 'comic',
       wishlist: 'collection',
@@ -530,6 +540,57 @@ describe('Shelf kinds', () => {
     const db = openTestDb();
     db.prepare("UPDATE shelves SET kind = 'hologram' WHERE id = 'books'").run();
     expect(load(db).shelves[0].kind).toBe('collection');
+  });
+});
+
+describe('Song storage', () => {
+  const loadTrack = (db: DatabaseSync, itemId: Id) => {
+    const row = db.prepare(SELECT_TRACK).get(itemId);
+    return row ? rowToTrack({ ...row } as unknown as TrackRow) : null;
+  };
+  const loadKinds = (db: DatabaseSync) =>
+    Object.fromEntries(
+      db
+        .prepare(SELECT_FILE_KINDS)
+        .all()
+        .map((r) => [String(r.item_id), rowToFileKind({ ...r } as unknown as FileKindRow)]),
+    );
+
+  it('saves a song, knows every item’s file kind, and drops the song with its item', () => {
+    const db = openTestDb();
+    let state = createDefaultState();
+    const shelf = (id: string) => state.shelves.find((s) => s.id === id)!;
+    for (const [shelfId, title] of [['music', 'Night Drive'], ['books', 'Dune'], ['manga', 'Akira'], ['movies', 'Alien']]) {
+      state = dispatch(db, state, addItem(shelf(shelfId), title));
+    }
+    const [song, dune, akira] = state.items;
+    const track: Track = {
+      itemId: song.id,
+      fileName: 'song.flac',
+      format: 'flac',
+      durationMs: 215000,
+      trackNumber: 3,
+      discNumber: null,
+      lyrics: 'La la',
+    };
+    run(db, [insertTrackStatement(track)]);
+    run(db, replaceChapters(dune.id, chapters(dune.id, ['One'])));
+    run(db, saveComicStatements({ itemId: akira.id, kind: 'comic', readingMode: 'rtl' }, chapters(akira.id, ['One']), []));
+
+    expect(loadTrack(db, song.id)).toEqual(track);
+    expect(loadKinds(db)).toEqual({ [song.id]: 'music', [dune.id]: 'novel', [akira.id]: 'comic' });
+
+    dispatch(db, state, { type: 'item/remove', itemId: song.id });
+    expect(loadTrack(db, song.id)).toBeNull();
+  });
+
+  it('an unknown stored format loads as mp3, and version 10 can run twice', () => {
+    const db = openTestDb();
+    db.exec(MIGRATE_V10);
+    const state = dispatch(db, createDefaultState(), addItem(createDefaultState().shelves[4], 'Odd'));
+    const itemId = state.items[0].id;
+    db.prepare("INSERT INTO tracks (item_id, file_name, format) VALUES (?, 'song.xyz', 'xyz')").run(itemId);
+    expect(loadTrack(db, itemId)).toMatchObject({ format: 'mp3', durationMs: null, lyrics: '' });
   });
 });
 

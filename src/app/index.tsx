@@ -18,11 +18,11 @@ import { useT } from '@/i18n/useT';
 import { SORT_ORDERS, filterItems, sortItems } from '@/models/query';
 import { misplacedItems, moveTargets } from '@/models/shelfKinds';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
-import type { BookSummary, Id, Item, ShelfKind } from '@/models/types';
+import type { BookSummary, FileKind, Id, Item, ShelfKind } from '@/models/types';
 import { useSettings } from '@/state/SettingsProvider';
 import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
-import { loadBookSummaries } from '@/storage/database';
+import { loadBookSummaries, loadFileKinds } from '@/storage/database';
 import { deleteItemFiles } from '@/storage/shelfFiles';
 import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
@@ -62,11 +62,17 @@ export default function ShelvesScreen() {
   // Reading progress of imported books, reloaded whenever the shelf comes back into view.
   const db = useSQLiteContext();
   const [books, setBooks] = useState<Map<Id, BookSummary>>(new Map());
+  // What kind of file each item is, for the shelf-kind checks.
+  const [fileKinds, setFileKinds] = useState<Map<Id, FileKind>>(new Map());
   useFocusEffect(
     useCallback(() => {
       let current = true;
-      loadBookSummaries(db)
-        .then((loaded) => current && setBooks(loaded))
+      Promise.all([loadBookSummaries(db), loadFileKinds(db)])
+        .then(([loadedBooks, loadedKinds]) => {
+          if (!current) return;
+          setBooks(loadedBooks);
+          setFileKinds(loadedKinds);
+        })
         .catch((error: unknown) => console.warn('Could not load reading progress', error));
       return () => {
         current = false;
@@ -83,8 +89,8 @@ export default function ShelvesScreen() {
 
   // Files that don't fit this shelf's kind, left here by an upgrade or a restore.
   const misplaced = useMemo(
-    () => (shelf ? misplacedItems(shelf, selectItemsOnShelf(state, shelf.id), books) : []),
-    [state, shelf, books],
+    () => (shelf ? misplacedItems(shelf, selectItemsOnShelf(state, shelf.id), fileKinds) : []),
+    [state, shelf, fileKinds],
   );
   const misplacedIds = useMemo(() => new Set(misplaced.map((i) => i.id)), [misplaced]);
 
@@ -151,7 +157,7 @@ export default function ShelvesScreen() {
   /** Opens the Move sheet for `items`, or explains why no shelf can take them all. */
   function openMoveSheet(items: Item[]) {
     if (!shelfId) return;
-    if (moveTargets(state.shelves, shelfId, items, books).length === 0) showMessage(t('select.moveNowhere'));
+    if (moveTargets(state.shelves, shelfId, items, fileKinds).length === 0) showMessage(t('select.moveNowhere'));
     else setMoveSheetOpen(true);
   }
 
@@ -299,7 +305,7 @@ export default function ShelvesScreen() {
           ) : (
             <View style={[styles.fabRow, { bottom: insets.bottom + spacing.lg }]}>
               {/* Book files are stored on the device, which the web version can't do. Collections have nothing to import. */}
-              {Platform.OS !== 'web' && (shelf.kind === 'novel' || shelf.kind === 'comic') && (
+              {Platform.OS !== 'web' && shelf.kind !== 'collection' && (
                 <Button
                   title={t(`home.import.${shelf.kind}`)}
                   accessibilityLabel={t(`home.importTo.${shelf.kind}`, { shelf: shelf.name })}
@@ -323,7 +329,7 @@ export default function ShelvesScreen() {
         <OptionSheet
           visible={moveSheetOpen}
           title={t('select.moveTitle', { count: selectedItems.length })}
-          options={moveTargets(state.shelves, shelf.id, selectedItems, books).map((s) => ({
+          options={moveTargets(state.shelves, shelf.id, selectedItems, fileKinds).map((s) => ({
             value: s.id,
             label: s.lock ? `🔒 ${s.name}` : s.name,
           }))}

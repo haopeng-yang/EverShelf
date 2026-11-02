@@ -23,6 +23,18 @@ export async function writePageBytes(_itemId: Id, _fileName: string, _bytes: Uin
   throw new Error('Comics are not supported on web yet');
 }
 
+export function songFileName(extension: string): string {
+  return `song.${extension.toLowerCase()}`;
+}
+
+export async function storeSongFile(_itemId: Id, _fileName: string, _from: unknown, _temporary: boolean): Promise<void> {
+  throw new Error('Songs are not supported on web yet');
+}
+
+export function songUri(_itemId: Id, _fileName: string): string {
+  return '';
+}
+
 export async function writeChapterText(_itemId: Id, _fileName: string, _text: string): Promise<void> {
   throw new Error('Books are not supported on web yet');
 }

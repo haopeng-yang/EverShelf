@@ -134,7 +134,7 @@ describe('backup with shelf kinds', () => {
     let state = createDefaultState();
     state = shelfReducer(state, addShelf('Reading', [], undefined, 'novel'));
     state = shelfReducer(state, addShelf('Songs', [], undefined, 'music'));
-    state = shelfReducer(state, addItem(state.shelves[4], 'Emma'));
+    state = shelfReducer(state, addItem(state.shelves.find((s) => s.name === 'Reading')!, 'Emma'));
     const book: BackupBook = {
       itemId: state.items[0].id,
       chapters: [{ id: 'c1', title: 'Chapter 1', text: 'Text.' }],
@@ -163,6 +163,7 @@ describe('backup with shelf kinds', () => {
       'collection', // movies
       'comic', // manga
       'collection', // anime
+      'music', // music
       'novel', // Reading, by the book on it
       'collection', // Songs: empty, and not a built-in shelf
     ]);

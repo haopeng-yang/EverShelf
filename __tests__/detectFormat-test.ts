@@ -17,6 +17,14 @@ describe('detectFormat', () => {
     expect(detectFormat(zip, 'Akira v01.cbr', '')).toBeNull();
   });
 
+  it('knows songs by extension, MIME type or first bytes', () => {
+    const flac = new Uint8Array([0x66, 0x4c, 0x61, 0x43, 0, 0, 0, 34, 0, 0, 0, 0]);
+    for (const name of ['a.mp3', 'b.M4A', 'c.flac', 'd.wav', 'e.mp4', 'f.aac']) expect(detectFormat(text, name, '')).toBe('audio');
+    expect(detectFormat(flac, 'msf:7', '')).toBe('audio');
+    expect(detectFormat(text, 'msf:7', 'audio/mpeg')).toBe('audio');
+    expect(detectFormat(text, 'song.ogg', '')).toBeNull();
+  });
+
   it('looks at the file itself for Android content links with no extension', () => {
     expect(hasExtension('msf:1000033298')).toBe(false);
     expect(detectFormat(text, 'msf:1000033298', '')).toBe('txt');

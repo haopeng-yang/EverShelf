@@ -15,6 +15,8 @@ import {
   type PickedBookFile,
 } from '@/books/importBook';
 import { ComicError, disposeComic, saveImportedComic } from '@/books/importComic';
+import { disposeSongs, saveImportedSongs, SongsError, type PickedSongs } from '@/books/importSongs';
+import { AudioError } from '@/books/music/audioTags';
 import { EpubError } from '@/books/parseEpub';
 import { CHAPTER_LENGTH, parseTxt, type ParsedChapter, type SplitRule } from '@/books/parseTxt';
 import { Button } from '@/components/Button';
@@ -35,9 +37,9 @@ const PREVIEW_CHAPTERS = 30;
 const READING_MODES: ReadingMode[] = ['ltr', 'rtl', 'vertical'];
 
 /**
- * Import a .txt or .epub book, or one or more comic files, onto a shelf: pick
- * the file(s), check the chapters, fix the title or author (and a comic's
- * reading direction), then save it as a new item.
+ * Import a .txt or .epub book, one or more comic files, or songs onto a shelf:
+ * pick the file(s), check the chapters or tracks, fix the title or author (a
+ * comic's reading direction, an album's artist), then save new items.
  */
 export default function ImportScreen() {
   const { shelfId } = useLocalSearchParams<{ shelfId: string }>();
@@ -56,11 +58,14 @@ export default function ImportScreen() {
   const [author, setAuthor] = useState('');
   const [readingMode, setReadingMode] = useState<ReadingMode>('ltr');
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  // For songs: artist and album for every song, or null to keep each song's own.
+  const [songArtist, setSongArtist] = useState<string | null>(null);
+  const [songAlbum, setSongAlbum] = useState<string | null>(null);
 
   // Comics may have copied a file to the cache while picking; drop it when it's replaced or the screen closes.
   useEffect(() => {
-    if (file?.kind !== 'comic') return;
-    return () => disposeComic(file.comic);
+    if (file?.kind === 'comic') return () => disposeComic(file.comic);
+    if (file?.kind === 'songs') return () => disposeSongs(file.songs);
   }, [file]);
 
   // TXT files are split here, so changing the rule re-splits; EPUBs come with their chapters.
@@ -89,6 +94,9 @@ export default function ImportScreen() {
       if (!picked) return;
       setFile(picked);
       setRule('headings');
+      setSongArtist(null);
+      setSongAlbum(null);
+      if (picked.kind === 'songs') return;
       if (picked.kind === 'comic') {
         const { comic } = picked;
         setTitle(comic.title);
@@ -121,6 +129,10 @@ export default function ImportScreen() {
 
   async function save() {
     if (!shelf || !file || saving) return;
+    if (file.kind === 'songs') {
+      await saveSongs(file.songs);
+      return;
+    }
     if (!title.trim()) {
       showMessage(t('itemEdit.needTitle'));
       return;
@@ -174,6 +186,34 @@ export default function ImportScreen() {
     }
   }
 
+  async function saveSongs(picked: PickedSongs) {
+    if (!shelf) return;
+    setProgress({ done: 0, total: picked.songs.length });
+    try {
+      const { items, failed } = await saveImportedSongs(
+        db,
+        dispatch,
+        shelf,
+        picked.songs.map((song) => ({
+          song,
+          title: song.title,
+          tagValues: {
+            [t('tag.artist')]: songArtist ?? song.info.artist,
+            [t('tag.album')]: songAlbum ?? song.info.album,
+            [t('tag.date')]: song.info.year,
+          },
+        })),
+        (done, total) => setProgress({ done, total }),
+      );
+      if (failed > 0) showMessage(t('import.songsFailed', { count: failed }));
+      if (items.length === 1) router.replace({ pathname: '/item/[id]', params: { id: items[0].id } });
+      else router.back();
+    } catch (error) {
+      setProgress(null);
+      showMessage(error instanceof SongsError ? t('import.songsNoSpace') : t('import.saveFailed', { error: String(error) }));
+    }
+  }
+
   return (
     <KeyboardAwareScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" bottomOffset={spacing.xl}>
       <Stack.Screen
@@ -189,12 +229,15 @@ export default function ImportScreen() {
         <View style={styles.center}>
           <ActivityIndicator />
           <Text style={styles.hint}>
-            {t(file?.kind === 'comic' ? 'import.savingPages' : 'import.saving', { done: progress.done, total: progress.total })}
+            {t(file?.kind === 'comic' ? 'import.savingPages' : file?.kind === 'songs' ? 'import.savingSongs' : 'import.saving', {
+              done: progress.done,
+              total: progress.total,
+            })}
           </Text>
         </View>
       ) : !file ? (
         <View style={styles.center}>
-          {picking ? <ActivityIndicator /> : <Text style={styles.hint}>{t(shelf.kind === 'comic' ? 'import.intro.comic' : 'import.intro.novel')}</Text>}
+          {picking ? <ActivityIndicator /> : <Text style={styles.hint}>{t(`import.intro.${shelf.kind === 'comic' || shelf.kind === 'music' ? shelf.kind : 'novel'}`)}</Text>}
           <Button title={t('import.chooseFile')} variant="primary" disabled={picking} onPress={choose} />
         </View>
       ) : (
@@ -216,17 +259,30 @@ export default function ImportScreen() {
                   .join(' · ')}
               </Text>
             )}
+            {file.kind === 'songs' && <Text style={styles.hint}>{t('import.songs', { count: file.songs.songs.length })}</Text>}
             <Button title={t('import.chooseOther')} compact onPress={choose} style={styles.alignStart} />
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.label}>{t('tag.title')}</Text>
-            <TextField value={title} onChangeText={setTitle} placeholder={t('itemEdit.titlePlaceholder')} />
-          </View>
-          <View style={styles.section}>
-            <Text style={styles.label}>{t('tag.author')}</Text>
-            <TextField value={author} onChangeText={setAuthor} />
-          </View>
+          {file.kind === 'songs' ? (
+            <SongsPreview
+              picked={file.songs}
+              artist={songArtist}
+              album={songAlbum}
+              onChangeArtist={setSongArtist}
+              onChangeAlbum={setSongAlbum}
+            />
+          ) : (
+            <>
+              <View style={styles.section}>
+                <Text style={styles.label}>{t('tag.title')}</Text>
+                <TextField value={title} onChangeText={setTitle} placeholder={t('itemEdit.titlePlaceholder')} />
+              </View>
+              <View style={styles.section}>
+                <Text style={styles.label}>{t('tag.author')}</Text>
+                <TextField value={author} onChangeText={setAuthor} />
+              </View>
+            </>
+          )}
 
           {txt && (
             <View style={styles.section}>
@@ -268,6 +324,7 @@ export default function ImportScreen() {
             </View>
           )}
 
+          {file.kind !== 'songs' && (
           <View style={styles.section}>
             <Text style={styles.label}>{t('import.chapters', { count: chapterRows.length })}</Text>
             <View style={styles.chapterList}>
@@ -284,9 +341,92 @@ export default function ImportScreen() {
               )}
             </View>
           </View>
+          )}
         </>
       )}
     </KeyboardAwareScrollView>
+  );
+}
+
+/** The value every song shares, or '' if they differ. */
+function shared(values: string[]): string {
+  return values.every((v) => v === values[0]) ? (values[0] ?? '') : '';
+}
+
+/** "3:05", or "1:02:09" for an hour or more. */
+function durationLabel(ms: number): string {
+  const total = Math.round(ms / 1000);
+  const [h, m, sec] = [Math.floor(total / 3600), Math.floor((total % 3600) / 60), total % 60];
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+}
+
+interface SongsPreviewProps {
+  picked: PickedSongs;
+  /** Null keeps each song's own value. */
+  artist: string | null;
+  album: string | null;
+  onChangeArtist: (value: string) => void;
+  onChangeAlbum: (value: string) => void;
+}
+
+/** Artist and album for all the songs at once, then the track list in album order. */
+function SongsPreview({ picked, artist, album, onChangeArtist, onChangeAlbum }: SongsPreviewProps) {
+  const t = useT();
+  const styles = useStyles();
+  const { songs, skipped } = picked;
+  const several = songs.length > 1;
+  const artists = songs.map((s) => s.info.artist);
+  const albums = songs.map((s) => s.info.album);
+  const mixedHint = (values: string[]) =>
+    several && shared(values) === '' && values.some(Boolean) ? t('import.songsMixed') : '';
+
+  return (
+    <>
+      <View style={styles.section}>
+        <Text style={styles.label}>{t('tag.artist')}</Text>
+        <TextField value={artist ?? shared(artists)} onChangeText={onChangeArtist} placeholder={mixedHint(artists)} />
+      </View>
+      <View style={styles.section}>
+        <Text style={styles.label}>{t('tag.album')}</Text>
+        <TextField value={album ?? shared(albums)} onChangeText={onChangeAlbum} placeholder={mixedHint(albums)} />
+        {several && <Text style={styles.hint}>{t('import.songsSharedHint')}</Text>}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.label}>{t('import.songs', { count: songs.length })}</Text>
+        <View style={styles.chapterList}>
+          {songs.slice(0, PREVIEW_CHAPTERS).map((song, index) => (
+            <View key={index} style={styles.chapterRow}>
+              <Text style={styles.trackNumber}>{song.trackNumber ?? '–'}</Text>
+              <View style={styles.songText}>
+                <Text style={styles.chapterTitle} numberOfLines={1}>
+                  {song.title || t('import.noFileName')}
+                </Text>
+                {(artist ?? song.info.artist) !== '' && (
+                  <Text style={styles.songArtist} numberOfLines={1}>
+                    {artist ?? song.info.artist}
+                  </Text>
+                )}
+              </View>
+              {song.info.durationMs !== null && <Text style={styles.hint}>{durationLabel(song.info.durationMs)}</Text>}
+            </View>
+          ))}
+          {songs.length > PREVIEW_CHAPTERS && (
+            <Text style={styles.hint}>{t('import.more', { count: songs.length - PREVIEW_CHAPTERS })}</Text>
+          )}
+        </View>
+        {skipped.length > 0 && (
+          <Text style={styles.hint}>
+            {t('import.songsSkipped', {
+              files: skipped
+                .map((s) => `${s.name || t('import.noFileName')} (${t(s.code === 'video' ? 'import.reasonVideo' : 'import.reasonNotSong')})`)
+                .join(', '),
+            })}
+          </Text>
+        )}
+      </View>
+    </>
   );
 }
 
@@ -304,7 +444,7 @@ function wrongShelfText(error: WrongShelfError, shelf: Shelf, shelves: Shelf[], 
   const params = { shelf: shelf.name, kind: t(`shelfKind.${shelf.kind}`), file: t(`fileKind.${error.fileKind}`) };
   const problem =
     error.fileCount > 1
-      ? t('import.wrongShelfFiles', params)
+      ? t('import.wrongShelfFiles', { ...params, files: t(error.fileKind === 'music' ? 'fileKinds.music' : 'fileKinds.comic') })
       : error.fileName
         ? t('import.wrongShelf', { ...params, name: error.fileName })
         : t('import.wrongShelfUnnamed', params);
@@ -321,6 +461,7 @@ function errorText(error: unknown, t: Translate): string {
     return error.message ? t('import.unsupported', { name: error.message }) : t('import.unsupportedUnnamed');
   }
   if (error instanceof MixedFilesError) return t('import.mixedFiles');
+  if (error instanceof AudioError) return t(error.code === 'video' ? 'import.isVideo' : 'import.notSong');
   if (error instanceof ComicError) return t(error.code === 'noSpace' ? 'import.comicNoSpace' : 'import.comicNoPages');
   if (error instanceof ZipError) {
     if (error.code === 'tooLarge') return t('import.comicTooLarge');
@@ -349,4 +490,7 @@ const useStyles = makeStyles((c) => ({
   chapterList: { borderRadius: radius.md, backgroundColor: c.surface, padding: spacing.md, gap: spacing.sm },
   chapterRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   chapterTitle: { flex: 1, fontSize: fontSize.body, color: c.text },
+  trackNumber: { minWidth: 24, fontSize: fontSize.small, color: c.textMuted, textAlign: 'right' },
+  songText: { flex: 1, minWidth: 0 },
+  songArtist: { fontSize: fontSize.small, color: c.textMuted },
 }));

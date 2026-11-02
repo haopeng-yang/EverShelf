@@ -6,9 +6,9 @@ import { fontSize, makeStyles, radius, spacing } from '@/theme';
 import { ItemGrid, type ShelfLayoutProps } from './ItemGrid';
 
 /**
- * A music shelf. Songs can't be imported yet (roadmap Phase 4), so for now it
- * says so and works like a collection; the song list and player replace this
- * in Phase 5.
+ * A music shelf. Songs can be imported but not played yet, so for now it says
+ * so and tapping a song opens its details; the song list and player replace
+ * this in roadmap Phase 5.
  */
 export function MusicShelf({ shelf, query, banner, openDetails, ...grid }: ShelfLayoutProps) {
   const t = useT();
@@ -26,7 +26,7 @@ export function MusicShelf({ shelf, query, banner, openDetails, ...grid }: Shelf
           )}
         </>
       }
-      emptyText={query ? t('home.noMatches', { shelf: shelf.name, query }) : t('home.empty', { shelf: shelf.name })}
+      emptyText={query ? t('home.noMatches', { shelf: shelf.name, query }) : t('home.emptyMusic', { shelf: shelf.name })}
       onOpen={openDetails}
     />
   );

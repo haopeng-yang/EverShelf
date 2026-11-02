@@ -91,7 +91,9 @@ Opening a shelf shows a layout that fits its type. `src/app/index.tsx` is alread
 
 ✅ **Phases 1–3 make a complete, releasable update on their own** (typed shelves for novels and comics) before any music code exists.
 
-## Phase 4 – Music: storage and import
+## Phase 4 – Music: storage and import ✅
+
+> **As built:** the `tracks` table keeps only what belongs to the file (file name, format, length, track and disc number, plain lyrics). Title, artist and album are the item's title and tags, so there's one place to edit them. Song files live at `books/<itemId>/song.<ext>`, next to book files, so deleting an item and the cleanup after a restore already cover them. They're copied or moved natively rather than streamed through JavaScript. Files in a multi-file pick that aren't songs are skipped and listed rather than failing the whole pick. New installs get a built-in Music shelf; existing users add one with the Music type. Still to do: shrinking very large cover art (needs `expo-image-manipulator`), and a shared placeholder cover for an album without art.
 
 1. **Migration V10**: a `tracks` table with `item_id`, `file_name`, `format`, `duration_ms`, `artist`, `album`, `album_artist`, `track_number`, `disc_number`, `year`, plus `has_lyrics`. Add a `playback_progress` table (`item_id`, `position_ms`, `updated_at`, `play_count`, `last_played_at`), or reuse `reading_progress` the way comics did. A separate table is clearer here, because songs have no chapters.
 2. **Storage**: copy each song to `music/<itemId>.<ext>` by **streaming in chunks**, as `importComic` does. Never read the whole file into memory: FLAC albums are often 30–50 MB per track. Deleting the item deletes the file (extend `deleteItemFiles`).

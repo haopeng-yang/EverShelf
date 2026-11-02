@@ -32,6 +32,11 @@ export function decodeText(bytes: Uint8Array): DecodedText {
   }
 }
 
+/** Decodes bytes known to be in `encoding` (no byte-order mark expected). Invalid bytes become U+FFFD. */
+export function decodeAs(bytes: Uint8Array, encoding: TextEncodingName): string {
+  return encoding === 'gb18030' ? decodeGb18030(bytes) : decoder(encoding).decode(bytes);
+}
+
 function decodeGb18030(bytes: Uint8Array): string {
   try {
     // A phone's built-in decoder, if it has GB18030, is fastest.

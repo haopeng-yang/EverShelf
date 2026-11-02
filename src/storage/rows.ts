@@ -1,11 +1,13 @@
-import { isShelfKind } from '../models/shelfKinds';
+import { fileKindOfBook, isShelfKind } from '../models/shelfKinds';
 import {
   DEFAULT_READING_MODE,
+  type AudioFormat,
   type BookInfo,
   type BookKind,
   type Bookmark,
   type BookSummary,
   type Chapter,
+  type FileKind,
   type Item,
   type Page,
   type ReadingMode,
@@ -13,6 +15,7 @@ import {
   type Shelf,
   type ShelfState,
   type Tag,
+  type Track,
 } from '../models/types';
 
 // Plain rows as they come out of the tables in schema.ts.
@@ -32,6 +35,22 @@ export interface ShelfRow {
 export interface ShelfBookKindRow {
   shelf_id: string;
   kind: string | null;
+}
+
+export interface TrackRow {
+  item_id: string;
+  file_name: string;
+  format: string;
+  duration_ms: number | null;
+  track_number: number | null;
+  disc_number: number | null;
+  lyrics: string;
+}
+
+/** A row of SELECT_FILE_KINDS: kind is 'text', 'comic' or 'music'. */
+export interface FileKindRow {
+  item_id: string;
+  kind: string;
 }
 
 export interface ItemRow {
@@ -240,6 +259,24 @@ export function rowToPage(row: PageRow): Page {
     height: row.height,
   };
 }
+
+export function rowToTrack(row: TrackRow): Track {
+  return {
+    itemId: row.item_id,
+    fileName: row.file_name,
+    format: AUDIO_FORMATS.find((f) => f === row.format) ?? 'mp3',
+    durationMs: row.duration_ms,
+    trackNumber: row.track_number,
+    discNumber: row.disc_number,
+    lyrics: row.lyrics,
+  };
+}
+
+export function rowToFileKind(row: FileKindRow): FileKind {
+  return row.kind === 'music' ? 'music' : fileKindOfBook(parseBookKind(row.kind));
+}
+
+const AUDIO_FORMATS: AudioFormat[] = ['mp3', 'm4a', 'flac', 'wav', 'aac'];
 
 // Values written by a newer version of the app fall back to the defaults.
 export function parseBookKind(value: string): BookKind {

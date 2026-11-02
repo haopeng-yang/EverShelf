@@ -1,9 +1,29 @@
 import type { BackupBook } from '../models/backup';
 import type { ShelfAction } from '../models/shelfReducer';
 import { fileKindOfBook, inferShelfKind } from '../models/shelfKinds';
-import type { BookInfo, Bookmark, Chapter, FileKind, Id, Item, Page, ReadingProgress, Shelf, ShelfState } from '../models/types';
+import type {
+  BookInfo,
+  Bookmark,
+  Chapter,
+  FileKind,
+  Id,
+  Item,
+  Page,
+  ReadingProgress,
+  Shelf,
+  ShelfState,
+  Track,
+} from '../models/types';
 import { chapterToRow, itemToRow, pageToRow, parseBookKind, shelfToRow, tagToRow, type ShelfBookKindRow } from './rows';
-import { INSERT_BOOKMARK, INSERT_PAGE, SET_FINISHED, SET_SHELF_KIND, UPSERT_BOOK_INFO, UPSERT_PROGRESS } from './schema';
+import {
+  INSERT_BOOKMARK,
+  INSERT_PAGE,
+  INSERT_TRACK,
+  SET_FINISHED,
+  SET_SHELF_KIND,
+  UPSERT_BOOK_INFO,
+  UPSERT_PROGRESS,
+} from './schema';
 
 export type SqlValue = string | number | null;
 
@@ -154,6 +174,13 @@ export function insertBookmarkStatement(bookmark: Bookmark): Statement {
   return {
     sql: INSERT_BOOKMARK,
     params: [bookmark.id, bookmark.itemId, bookmark.chapterId, bookmark.paragraph, bookmark.excerpt, bookmark.createdAt],
+  };
+}
+
+export function insertTrackStatement(track: Track): Statement {
+  return {
+    sql: INSERT_TRACK,
+    params: [track.itemId, track.fileName, track.format, track.durationMs, track.trackNumber, track.discNumber, track.lyrics],
   };
 }
 
