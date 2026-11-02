@@ -42,3 +42,5 @@ yarn-error.*
 
 # generated comic test files (scripts/make-test-comics.mjs)
 /test-comics
+# generated song test files (scripts/make-test-songs.mjs)
+/test-songs

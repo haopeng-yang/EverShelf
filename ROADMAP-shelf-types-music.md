@@ -52,7 +52,8 @@ Shelf types come first. Music needs them so it has a place to live, and they're 
    * An M4A from iTunes with cover art, a FLAC with a `PICTURE` block, a WAV, an audio-only MP4 and a real video MP4 (it must be rejected with a clear message).
    * A whole album (10–15 tracks, numbered) for the multi-file import, and one long file (1–2 hours, for example an audiobook or DJ mix) to test seeking and saving the position.
    * Public-domain or CC music: the Free Music Archive and Musopen have both.
-3. Install the player: `npx expo install expo-audio`.
+   * ✅ `node scripts/make-test-songs.mjs` generates most of these in `test-songs/`: a 10-track FLAC album with tones, a song with an `.lrc`, a WAV, silent MP3s with every kind of tag listed above, a huge cover, broken tags and a fake `.mp3`. `--large` adds a 2-hour WAV, and `--many` adds 200 MP3s. The M4A and MP4 files have to be real ones.
+3. ✅ Install the player: `npx expo install expo-audio` (and its peer `expo-asset`). The plugin in `app.json` turns off the microphone permissions, since EverShelf never records.
 4. Remember the testing notes from the comic work: Expo Go needs `--go`, and the migration step must exist before `SCHEMA_VERSION` goes up (see the version 7 repair).
 
 ## Phase 1 – Shelf types: data model

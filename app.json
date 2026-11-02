@@ -44,7 +44,15 @@
       ],
       "expo-sharing",
       "expo-localization",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-asset"
     ],
     "extra": {
       "router": {
