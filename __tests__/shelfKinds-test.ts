@@ -1,4 +1,16 @@
-import { canHold, fileKindOfBook, inferShelfKind, isShelfKind } from '../src/models/shelfKinds';
+import { addItem } from '../src/models/actions';
+import { createDefaultState } from '../src/models/defaults';
+import {
+  canChangeKind,
+  canHold,
+  fileKindOfBook,
+  inferShelfKind,
+  isShelfKind,
+  misplacedItems,
+  moveTargets,
+} from '../src/models/shelfKinds';
+import { shelfReducer } from '../src/models/shelfReducer';
+import type { BookKind, BookSummary, Id } from '../src/models/types';
 
 describe('canHold', () => {
   it('only lets files onto a shelf of the same kind', () => {
@@ -51,5 +63,52 @@ describe('helpers', () => {
   it('calls a text book a novel', () => {
     expect(fileKindOfBook('text')).toBe('novel');
     expect(fileKindOfBook('comic')).toBe('comic');
+  });
+});
+
+describe('shelves and their items', () => {
+  /** Books (novel shelf) with a novel, a comic and a manual entry; Manga, Movies and Anime empty. */
+  function library() {
+    let state = createDefaultState();
+    const [books] = state.shelves;
+    for (const title of ['Dune', 'Akira', 'Wishlist book']) state = shelfReducer(state, addItem(books, title));
+    const [dune, akira, wish] = state.items;
+    const summary = (itemId: Id, kind: BookKind): BookSummary => ({
+      itemId,
+      kind,
+      chapterCount: 1,
+      percent: 0,
+      lastReadAt: null,
+      finished: false,
+    });
+    const summaries = new Map([
+      [dune.id, summary(dune.id, 'text')],
+      [akira.id, summary(akira.id, 'comic')],
+    ]);
+    return { state, books, dune, akira, wish, summaries };
+  }
+
+  it('finds the items that don’t fit their shelf', () => {
+    const { state, books, akira, summaries } = library();
+    expect(misplacedItems(books, state.items, summaries)).toEqual([akira]);
+    expect(misplacedItems(books, state.items, new Map())).toEqual([]);
+  });
+
+  it('only offers Move targets that can hold every item', () => {
+    const { state, dune, akira, wish, summaries } = library();
+    const ids = (items: typeof state.items) => moveTargets(state.shelves, 'books', items, summaries).map((s) => s.id);
+    expect(ids([akira])).toEqual(['manga']);
+    expect(ids([wish])).toEqual(['movies', 'manga', 'anime']);
+    expect(ids([dune, wish])).toEqual([]);
+    expect(ids([dune, akira])).toEqual([]);
+  });
+
+  it('only lets a shelf change to a kind its files fit', () => {
+    const { state, dune, akira, wish, summaries } = library();
+    expect(canChangeKind('comic', [akira, wish], summaries)).toBe(true);
+    expect(canChangeKind('collection', [wish], summaries)).toBe(true);
+    expect(canChangeKind('collection', [dune], summaries)).toBe(false);
+    expect(canChangeKind('novel', state.items, summaries)).toBe(false);
+    expect(canChangeKind('music', [], summaries)).toBe(true);
   });
 });

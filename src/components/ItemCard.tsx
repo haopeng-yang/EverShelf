@@ -4,6 +4,7 @@ import type { BookSummary, Item } from '@/models/types';
 import { fontSize, makeStyles, spacing } from '@/theme';
 
 import { Cover } from './Cover';
+import { MisplacedMark } from './MisplacedMark';
 import { ProgressBadge } from './ProgressBadge';
 import { SelectionMark } from './SelectionMark';
 
@@ -14,12 +15,14 @@ interface ItemCardProps {
   book?: BookSummary;
   /** Set while the shelf is in selection mode: whether this item is picked. */
   selected?: boolean;
+  /** True if the item doesn't fit on its shelf's kind. */
+  misplaced?: boolean;
   onPress: () => void;
   onLongPress?: () => void;
 }
 
 /** One item in the shelf grid: cover with the title underneath. */
-export function ItemCard({ item, width, book, selected, onPress, onLongPress }: ItemCardProps) {
+export function ItemCard({ item, width, book, selected, misplaced, onPress, onLongPress }: ItemCardProps) {
   const styles = useStyles();
   return (
     <Pressable
@@ -32,6 +35,7 @@ export function ItemCard({ item, width, book, selected, onPress, onLongPress }: 
       <View>
         <Cover uri={item.coverUri} title={item.title} />
         <ProgressBadge book={book} />
+        {misplaced && <MisplacedMark />}
         {selected !== undefined && <SelectionMark selected={selected} />}
       </View>
       <Text style={styles.title} numberOfLines={2}>

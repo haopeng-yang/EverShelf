@@ -475,6 +475,9 @@ describe('Shelf kinds', () => {
     const state = dispatch(db, createDefaultState(), addShelf('Songs', [], undefined, 'music'));
     expect(load(db)).toEqual(state);
     expect(load(db).shelves.at(-1)!.kind).toBe('music');
+    const changed = dispatch(db, state, { type: 'shelf/setKind', shelfId: 'movies', kind: 'comic' });
+    expect(load(db)).toEqual(changed);
+    expect(changed.shelves[1].kind).toBe('comic');
   });
 
   it('upgrading to version 9 gives each shelf the kind of what is on it, and can run twice', () => {

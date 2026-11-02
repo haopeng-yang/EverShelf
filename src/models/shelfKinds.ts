@@ -1,9 +1,12 @@
-import type { BookKind, FileKind, Id, ShelfKind } from './types';
+import type { BookKind, BookSummary, FileKind, Id, Item, Shelf, ShelfKind } from './types';
 
 // Which files may go on which shelf. Every check (import, Move, restore) goes
 // through canHold, so the rule lives in one place.
 
 export const SHELF_KINDS: ShelfKind[] = ['collection', 'novel', 'comic', 'music'];
+
+/** The kinds a user can pick for a shelf. Music joins once songs can be imported (roadmap Phase 4). */
+export const PICKABLE_SHELF_KINDS: ShelfKind[] = ['collection', 'novel', 'comic'];
 
 export function isShelfKind(value: unknown): value is ShelfKind {
   return SHELF_KINDS.some((kind) => kind === value);
@@ -17,6 +20,33 @@ export function fileKindOfBook(kind: BookKind): FileKind {
 /** Whether a shelf may hold an item. `fileKind` is null for a manual entry, which fits on any shelf. */
 export function canHold(shelfKind: ShelfKind, fileKind: FileKind | null): boolean {
   return fileKind === null || shelfKind === fileKind;
+}
+
+/** What kind of file an item is, from the book summaries the shelf screen loads. Null for a manual entry. */
+export function itemFileKind(itemId: Id, books: ReadonlyMap<Id, BookSummary>): FileKind | null {
+  const book = books.get(itemId);
+  return book ? fileKindOfBook(book.kind) : null;
+}
+
+/** The items that don't fit on their shelf, e.g. comics left on a novel shelf by the upgrade or a restore. */
+export function misplacedItems(shelf: Shelf, items: Item[], books: ReadonlyMap<Id, BookSummary>): Item[] {
+  return items.filter((item) => !canHold(shelf.kind, itemFileKind(item.id, books)));
+}
+
+/** The shelves, other than `fromShelfId`, that can hold every one of `items`. */
+export function moveTargets(
+  shelves: Shelf[],
+  fromShelfId: Id,
+  items: Item[],
+  books: ReadonlyMap<Id, BookSummary>,
+): Shelf[] {
+  const kinds = items.map((item) => itemFileKind(item.id, books));
+  return shelves.filter((s) => s.id !== fromShelfId && kinds.every((kind) => canHold(s.kind, kind)));
+}
+
+/** Whether a shelf can become `kind`: only if every file already on it would still fit. */
+export function canChangeKind(kind: ShelfKind, items: Item[], books: ReadonlyMap<Id, BookSummary>): boolean {
+  return items.every((item) => canHold(kind, itemFileKind(item.id, books)));
 }
 
 /** The built-in shelves' kinds, by their fixed ids (see defaults.ts). */

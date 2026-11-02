@@ -67,12 +67,12 @@ Shelf types come first. Music needs them so it has a place to live, and they're 
 * **Backup**: write `kind` with each shelf. `BACKUP_FORMAT_VERSION` stays 2: older apps ignore the new field, and a bump would make them refuse new backups. Backups without a `kind` (or with an unknown one) run the same inference when restored.
 * Add `canHold(shelfKind, fileKind)` in `src/models/`: the one place that says what is allowed where. Every later check goes through it.
 
-## Phase 2 – Shelf types: enforcing them
+## Phase 2 – Shelf types: enforcing them ✅
 
 1. **Shelf editor** (`shelf/edit.tsx`): a type picker when adding a shelf (Collection, Novels, Comics, Music, each with a short line saying what it holds). Changing the type of an existing shelf follows decision 4.
 2. **Import** (`import.tsx`, `importBook.ts`):
    * The button says what fits the shelf: "Import book", "Import comic" or "Import songs". A collection shelf has no import button.
-   * After a file is picked, `detectFormat` + `canHold` decide. If the file doesn't fit, explain it: *"Dune.epub is a novel, but Manga is a comic shelf. Import it to a novel shelf instead."* If possible, offer the matching shelves right there.
+   * After a file is picked, `detectFormat` + `canHold` decide. If the file doesn't fit, explain it: *"Dune.epub is a novel, but Manga is a comic shelf. Import it to a novel shelf instead."* The message names the shelves that would fit, or says to add one.
    * A note for later: the system file picker can't reliably filter by extension on Android (content URIs often have no name, see the memory notes), so the check after picking is what really protects the shelf. A MIME filter in the picker is just a convenience.
 3. **Move**: the "Move to…" sheet only lists shelves that can hold *every* selected item. If none can, it says so.
 4. **Mixed shelves left by the migration**: show the "doesn't belong here" mark and the banner from decision 5, with a one-tap "Move them".

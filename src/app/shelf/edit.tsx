@@ -1,5 +1,6 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useSQLiteContext } from 'expo-sqlite';
+import { useEffect, useState } from 'react';
 import { Switch, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
@@ -11,10 +12,13 @@ import { TextField } from '@/components/TextField';
 import { useT } from '@/i18n/useT';
 import { addShelf } from '@/models/actions';
 import { newId } from '@/models/ids';
+import { PICKABLE_SHELF_KINDS, canChangeKind } from '@/models/shelfKinds';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
+import type { BookSummary, Id, ShelfKind } from '@/models/types';
 import { MIN_PASSWORD_LENGTH, createLock } from '@/security/shelfLock';
 import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
+import { loadBookSummaries } from '@/storage/database';
 import { deleteItemFiles } from '@/storage/shelfFiles';
 import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
@@ -24,7 +28,7 @@ interface TagNameRow {
   name: string;
 }
 
-/** Add a shelf (no params) or edit one (`id`): name, starting tags, position, delete. */
+/** Add a shelf (no params) or edit one (`id`): name, type, starting tags, position, delete. */
 export default function EditShelfScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const state = useShelfState();
@@ -34,6 +38,20 @@ export default function EditShelfScreen() {
   const shelf = index === -1 ? undefined : state.shelves[index];
 
   const [name, setName] = useState(shelf?.name ?? '');
+  const [kind, setKind] = useState<ShelfKind>(shelf?.kind ?? 'collection');
+  // Which items are books, so types that wouldn't fit them can be turned off.
+  const db = useSQLiteContext();
+  const [books, setBooks] = useState<Map<Id, BookSummary> | null>(shelf ? null : new Map());
+  useEffect(() => {
+    if (!id) return;
+    let current = true;
+    loadBookSummaries(db)
+      .then((loaded) => current && setBooks(loaded))
+      .catch((error: unknown) => console.warn('Could not load books', error));
+    return () => {
+      current = false;
+    };
+  }, [db, id]);
   const [tagNames, setTagNames] = useState<TagNameRow[]>(() =>
     (shelf?.defaultTagNames ?? [t('tag.date'), t('tag.description')]).map((n) => ({ key: newId(), name: n })),
   );
@@ -55,7 +73,12 @@ export default function EditShelfScreen() {
     );
   }
 
-  const itemCount = shelf ? selectItemsOnShelf(state, shelf.id).length : 0;
+  const shelfItems = shelf ? selectItemsOnShelf(state, shelf.id) : [];
+  const itemCount = shelfItems.length;
+  // Until the books have loaded, only the current type can be picked.
+  const kindAllowed = (k: ShelfKind) => k === shelf?.kind || (books !== null && canChangeKind(k, shelfItems, books));
+  // A kind that can't be picked yet (music, from a backup) is still shown while the shelf has it.
+  const kindOptions = PICKABLE_SHELF_KINDS.includes(kind) ? PICKABLE_SHELF_KINDS : [...PICKABLE_SHELF_KINDS, kind];
   // A shelf that already has a password keeps it unless a new one is typed.
   const keepsPassword = !!shelf?.lock && password === '' && confirmPassword === '';
 
@@ -81,12 +104,13 @@ export default function EditShelfScreen() {
       const defaults = tagNames.map((row) => row.name.trim()).filter(Boolean);
       if (shelf) {
         dispatch({ type: 'shelf/rename', shelfId: shelf.id, name: trimmed });
+        if (kind !== shelf.kind) dispatch({ type: 'shelf/setKind', shelfId: shelf.id, kind });
         dispatch({ type: 'shelf/setDefaultTags', shelfId: shelf.id, defaultTagNames: defaults });
         if (newLock) dispatch({ type: 'shelf/setLock', shelfId: shelf.id, lock: newLock });
         else if (!lockEnabled && shelf.lock) dispatch({ type: 'shelf/setLock', shelfId: shelf.id, lock: null });
         unlock(shelf.id);
       } else {
-        const action = addShelf(trimmed, defaults, newLock);
+        const action = addShelf(trimmed, defaults, newLock, kind);
         dispatch(action);
         // You just chose the password, so the new shelf starts unlocked until the app closes.
         unlock(action.shelf.id);
@@ -134,6 +158,23 @@ export default function EditShelfScreen() {
           placeholder={t('shelfEdit.namePlaceholder')}
           autoFocus={!shelf}
         />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.label}>{t('shelfEdit.kind')}</Text>
+        {kindOptions.map((k) => (
+          <Button
+            key={k}
+            title={`${t(`shelfKind.${k}`)} · ${t(`shelfKind.${k}Hint`)}`}
+            variant={kind === k ? 'primary' : 'secondary'}
+            compact
+            disabled={!kindAllowed(k)}
+            onPress={() => setKind(k)}
+          />
+        ))}
+        {kindOptions.some((k) => !kindAllowed(k)) && books !== null && (
+          <Text style={styles.hint}>{t('shelfEdit.kindLocked')}</Text>
+        )}
       </View>
 
       <View style={styles.section}>

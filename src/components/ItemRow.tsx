@@ -5,6 +5,7 @@ import type { BookSummary, Item } from '@/models/types';
 import { fontSize, makeStyles, spacing } from '@/theme';
 
 import { Cover } from './Cover';
+import { MisplacedMark } from './MisplacedMark';
 import { ProgressBadge } from './ProgressBadge';
 import { SelectionMark } from './SelectionMark';
 
@@ -17,12 +18,14 @@ interface ItemRowProps {
   book?: BookSummary;
   /** Set while the shelf is in selection mode: whether this item is picked. */
   selected?: boolean;
+  /** True if the item doesn't fit on its shelf's kind. */
+  misplaced?: boolean;
   onPress: () => void;
   onLongPress?: () => void;
 }
 
 /** One item in list view: small cover on the left, title and the first few filled-in tags on the right. */
-export function ItemRow({ item, book, selected, onPress, onLongPress }: ItemRowProps) {
+export function ItemRow({ item, book, selected, misplaced, onPress, onLongPress }: ItemRowProps) {
   const styles = useStyles();
   const t = useT();
   const summary = item.tags.filter((tag) => tag.value.trim()).slice(0, SUMMARY_TAGS);
@@ -37,6 +40,7 @@ export function ItemRow({ item, book, selected, onPress, onLongPress }: ItemRowP
       <View style={styles.cover}>
         <Cover uri={item.coverUri} title={item.title} />
         <ProgressBadge book={book} />
+        {misplaced && <MisplacedMark />}
         {selected !== undefined && <SelectionMark selected={selected} />}
       </View>
       <View style={styles.text}>

@@ -6,7 +6,14 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { guessReadingMode } from '@/books/comic/parseComic';
 import { ZipError } from '@/books/comic/zip';
-import { MixedFilesError, pickBookFile, saveImportedBook, UnsupportedFileError, type PickedBookFile } from '@/books/importBook';
+import {
+  MixedFilesError,
+  pickBookFile,
+  saveImportedBook,
+  UnsupportedFileError,
+  WrongShelfError,
+  type PickedBookFile,
+} from '@/books/importBook';
 import { ComicError, disposeComic, saveImportedComic } from '@/books/importComic';
 import { EpubError } from '@/books/parseEpub';
 import { CHAPTER_LENGTH, parseTxt, type ParsedChapter, type SplitRule } from '@/books/parseTxt';
@@ -17,7 +24,7 @@ import { NotFound } from '@/components/NotFound';
 import { TextField } from '@/components/TextField';
 import type { Translate } from '@/i18n';
 import { useT } from '@/i18n/useT';
-import type { ReadingMode } from '@/models/types';
+import type { ReadingMode, Shelf } from '@/models/types';
 import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
 import { fontSize, makeStyles, radius, spacing } from '@/theme';
@@ -75,9 +82,10 @@ export default function ImportScreen() {
   );
 
   async function choose() {
+    if (!shelf) return;
     setPicking(true);
     try {
-      const picked = await pickBookFile();
+      const picked = await pickBookFile(shelf.kind);
       if (!picked) return;
       setFile(picked);
       setRule('headings');
@@ -92,7 +100,7 @@ export default function ImportScreen() {
       setTitle(meta.title || picked.name.replace(/\.\w+$/, ''));
       setAuthor(meta.author);
     } catch (error) {
-      showMessage(errorText(error, t));
+      showMessage(error instanceof WrongShelfError ? wrongShelfText(error, shelf, state.shelves, t) : errorText(error, t));
     } finally {
       setPicking(false);
     }
@@ -186,7 +194,7 @@ export default function ImportScreen() {
         </View>
       ) : !file ? (
         <View style={styles.center}>
-          {picking ? <ActivityIndicator /> : <Text style={styles.hint}>{t('import.intro')}</Text>}
+          {picking ? <ActivityIndicator /> : <Text style={styles.hint}>{t(shelf.kind === 'comic' ? 'import.intro.comic' : 'import.intro.novel')}</Text>}
           <Button title={t('import.chooseFile')} variant="primary" disabled={picking} onPress={choose} />
         </View>
       ) : (
@@ -289,6 +297,23 @@ function withTitles(chapters: ParsedChapter[], t: Translate): ParsedChapter[] {
     const isOpening = index === 0 && chapters.length > 1 && chapters[1].title !== '';
     return { ...chapter, title: isOpening ? t('import.opening') : t('import.part', { n: index + 1 }) };
   });
+}
+
+/** "Dune.epub is a novel, but Manga is a Comics shelf. Import it into “Books” instead." */
+function wrongShelfText(error: WrongShelfError, shelf: Shelf, shelves: Shelf[], t: Translate): string {
+  const params = { shelf: shelf.name, kind: t(`shelfKind.${shelf.kind}`), file: t(`fileKind.${error.fileKind}`) };
+  const problem =
+    error.fileCount > 1
+      ? t('import.wrongShelfFiles', params)
+      : error.fileName
+        ? t('import.wrongShelf', { ...params, name: error.fileName })
+        : t('import.wrongShelfUnnamed', params);
+  const fitting = shelves.filter((s) => s.id !== shelf.id && s.kind === error.fileKind);
+  const fix =
+    fitting.length > 0
+      ? t('import.wrongShelfTry', { shelves: fitting.map((s) => `“${s.name}”`).join(', ') })
+      : t('import.wrongShelfNone', { kind: t(`shelfKind.${error.fileKind}`) });
+  return `${problem} ${fix}`;
 }
 
 function errorText(error: unknown, t: Translate): string {

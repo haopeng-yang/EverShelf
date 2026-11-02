@@ -4,7 +4,8 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { fillTags, newItemDraft } from '../models/actions';
 import { newId } from '../models/ids';
-import type { Chapter, Item, Shelf } from '../models/types';
+import { canHold } from '../models/shelfKinds';
+import type { Chapter, FileKind, Item, Shelf, ShelfKind } from '../models/types';
 import type { ShelfDispatch } from '../state/ShelfProvider';
 import { chapterFileName, deleteBookFiles, writeChapterText } from '../storage/bookFiles';
 import { deleteCover, writeCoverBytes } from '../storage/covers';
@@ -28,11 +29,25 @@ export class UnsupportedFileError extends Error {}
 /** Several files were picked, but they aren't all comics (only comics import as a set). */
 export class MixedFilesError extends Error {}
 
+/** The picked file doesn't fit on the shelf, e.g. a novel picked for a comic shelf. */
+export class WrongShelfError extends Error {
+  constructor(
+    readonly fileKind: FileKind,
+    /** The file name, or '' when the picker gave none. */
+    readonly fileName: string,
+    readonly fileCount: number,
+  ) {
+    super(`A ${fileKind} can't go on this shelf`);
+  }
+}
+
 /**
  * Opens the system file picker for a .txt, .epub or comic (.cbz/.zip) file, or
  * several comic files that make up one series. Null if the user cancels.
+ * Throws WrongShelfError, before reading the whole file, if what was picked
+ * doesn't fit on a `shelfKind` shelf.
  */
-export async function pickBookFile(): Promise<PickedBookFile | null> {
+export async function pickBookFile(shelfKind: ShelfKind): Promise<PickedBookFile | null> {
   // expo-file-system's own picker returns a File the app is allowed to read;
   // reading expo-document-picker's result with File was refused on Android
   // ("missing READ permission"). Any type is accepted, since some file
@@ -50,6 +65,7 @@ export async function pickBookFile(): Promise<PickedBookFile | null> {
     for (const file of picked.result) {
       if ((await formatOf(file)) !== 'comic') throw new MixedFilesError();
     }
+    if (!canHold(shelfKind, 'comic')) throw new WrongShelfError('comic', '', picked.result.length);
     const comic = await openComic(picked.result, pickedAreCopies);
     return { kind: 'comic', name: names.filter(Boolean).join(', '), comic };
   }
@@ -58,6 +74,8 @@ export async function pickBookFile(): Promise<PickedBookFile | null> {
   const [name] = names;
   const format = await formatOf(file);
   if (!format) throw new UnsupportedFileError(name);
+  const fileKind = format === 'comic' ? 'comic' : 'novel';
+  if (!canHold(shelfKind, fileKind)) throw new WrongShelfError(fileKind, name, 1);
   if (format === 'comic') return { kind: 'comic', name, comic: await openComic([file], pickedAreCopies) };
   const bytes = await readBytes(file);
   if (pickedAreCopies) deleteQuietly(file);

@@ -12,17 +12,18 @@ import { LockedShelf } from '@/components/LockedShelf';
 import { OptionSheet } from '@/components/OptionSheet';
 import { ShelfTabs } from '@/components/ShelfTabs';
 import { TextField } from '@/components/TextField';
-import { confirm } from '@/components/dialogs';
+import { confirm, showMessage } from '@/components/dialogs';
 import { useT } from '@/i18n/useT';
 import { SORT_ORDERS, filterItems, sortItems } from '@/models/query';
+import { misplacedItems, moveTargets } from '@/models/shelfKinds';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
-import type { BookSummary, Id } from '@/models/types';
+import type { BookSummary, Id, Item } from '@/models/types';
 import { useSettings } from '@/state/SettingsProvider';
 import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
 import { loadBookSummaries } from '@/storage/database';
 import { deleteItemFiles } from '@/storage/shelfFiles';
-import { fontSize, makeStyles, spacing } from '@/theme';
+import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
 const MIN_CARD_WIDTH = 140;
 const CONTINUE_READING_MAX = 10;
@@ -74,6 +75,13 @@ export default function ShelvesScreen() {
     return sortItems(filterItems(selectItemsOnShelf(state, shelf.id), query), settings.sortOrder, lastRead);
   }, [state, shelf, query, settings.sortOrder, books]);
   const searching = query.trim() !== '';
+
+  // Files that don't fit this shelf's kind, left here by an upgrade or a restore.
+  const misplaced = useMemo(
+    () => (shelf ? misplacedItems(shelf, selectItemsOnShelf(state, shelf.id), books) : []),
+    [state, shelf, books],
+  );
+  const misplacedIds = useMemo(() => new Set(misplaced.map((i) => i.id)), [misplaced]);
 
   const continueReading = useMemo(() => {
     if (!shelf) return [];
@@ -144,6 +152,20 @@ export default function ShelvesScreen() {
     for (const item of picked) void dispatch({ type: 'item/remove', itemId: item.id });
     deleteItemFiles(picked);
     clearSelection();
+  }
+
+  /** Opens the Move sheet for `items`, or explains why no shelf can take them all. */
+  function openMoveSheet(items: Item[]) {
+    if (!shelfId) return;
+    if (moveTargets(state.shelves, shelfId, items, books).length === 0) showMessage(t('select.moveNowhere'));
+    else setMoveSheetOpen(true);
+  }
+
+  /** "Move them" on the banner: select every misplaced item and offer where to move them. */
+  function moveMisplaced() {
+    if (!shelfId || misplaced.length === 0) return;
+    setPicked({ shelfId, ids: new Set(misplaced.map((i) => i.id)) });
+    openMoveSheet(misplaced);
   }
 
   function moveSelected(toShelfId: Id) {
@@ -250,11 +272,28 @@ export default function ShelvesScreen() {
               </Text>
             }
             ListHeaderComponent={
-              searching || !settings.showContinueReading ? undefined : (
-                <ContinueReadingRow
-                  books={continueReading}
-                  onOpen={(item) => router.push({ pathname: '/read/[itemId]', params: { itemId: item.id } })}
-                />
+              searching ? undefined : (
+                <>
+                  {misplaced.length > 0 && !selecting && (
+                    <View style={styles.banner}>
+                      <Text style={styles.bannerText}>
+                        {t('home.misplaced', { count: misplaced.length, kind: t(`shelfKind.${shelf.kind}`) })}
+                      </Text>
+                      <Button
+                        title={t('home.misplacedMove', { count: misplaced.length })}
+                        variant="primary"
+                        compact
+                        onPress={moveMisplaced}
+                      />
+                    </View>
+                  )}
+                  {settings.showContinueReading && (
+                    <ContinueReadingRow
+                      books={continueReading}
+                      onOpen={(item) => router.push({ pathname: '/read/[itemId]', params: { itemId: item.id } })}
+                    />
+                  )}
+                </>
               )
             }
             renderItem={({ item }) => {
@@ -262,6 +301,7 @@ export default function ShelvesScreen() {
                 item,
                 book: books.get(item.id),
                 selected: selection ? selection.has(item.id) : undefined,
+                misplaced: misplacedIds.has(item.id),
                 onPress: () => pressItem(item.id),
                 onLongPress: () => (selecting ? toggleSelected(item.id) : startSelection(item.id)),
               };
@@ -281,17 +321,17 @@ export default function ShelvesScreen() {
                 variant="primary"
                 disabled={state.shelves.length < 2}
                 style={selectionButtonStyle}
-                onPress={() => setMoveSheetOpen(true)}
+                onPress={() => openMoveSheet(selectedItems)}
               />
               <Button title={t('common.cancel')} style={selectionButtonStyle} onPress={clearSelection} />
             </View>
           ) : (
             <View style={[styles.fabRow, { bottom: insets.bottom + spacing.lg }]}>
-              {/* Book files are stored on the device, which the web version can't do. */}
-              {Platform.OS !== 'web' && (
+              {/* Book files are stored on the device, which the web version can't do. Collections have nothing to import. */}
+              {Platform.OS !== 'web' && (shelf.kind === 'novel' || shelf.kind === 'comic') && (
                 <Button
-                  title={t('home.importBook')}
-                  accessibilityLabel={t('home.importBookTo', { shelf: shelf.name })}
+                  title={t(`home.import.${shelf.kind}`)}
+                  accessibilityLabel={t(`home.importTo.${shelf.kind}`, { shelf: shelf.name })}
                   style={styles.fab}
                   onPress={() => router.push({ pathname: '/import', params: { shelfId: shelf.id } })}
                 />
@@ -312,7 +352,10 @@ export default function ShelvesScreen() {
         <OptionSheet
           visible={moveSheetOpen}
           title={t('select.moveTitle', { count: selectedItems.length })}
-          options={state.shelves.map((s) => ({ value: s.id, label: s.lock ? `🔒 ${s.name}` : s.name }))}
+          options={moveTargets(state.shelves, shelf.id, selectedItems, books).map((s) => ({
+            value: s.id,
+            label: s.lock ? `🔒 ${s.name}` : s.name,
+          }))}
           selected={shelf.id}
           onSelect={moveSelected}
           onClose={() => setMoveSheetOpen(false)}
@@ -343,6 +386,16 @@ const useStyles = makeStyles((c) => ({
   row: { gap: spacing.md },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.lg },
   emptyText: { fontSize: fontSize.body, color: c.textMuted, textAlign: 'center', marginTop: spacing.xl },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: c.surface,
+  },
+  bannerText: { flex: 1, fontSize: fontSize.small, color: c.text },
   fabRow: { position: 'absolute', right: spacing.lg, flexDirection: 'row', gap: spacing.sm },
   selectionBar: {
     flexDirection: 'row',

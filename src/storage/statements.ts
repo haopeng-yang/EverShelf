@@ -28,7 +28,8 @@ export function statementsForAction(action: ShelfAction, next: ShelfState): Stat
 
     case 'shelf/rename':
     case 'shelf/setDefaultTags':
-    case 'shelf/setLock': {
+    case 'shelf/setLock':
+    case 'shelf/setKind': {
       const index = next.shelves.findIndex((s) => s.id === action.shelfId);
       return index === -1 ? [] : [updateShelf(next.shelves[index], index)];
     }

@@ -1,4 +1,4 @@
-import type { Id, Item, Shelf, ShelfLock, ShelfState, Tag } from './types';
+import type { Id, Item, Shelf, ShelfKind, ShelfLock, ShelfState, Tag } from './types';
 
 /**
  * Every change to the shelf data goes through one of these actions.
@@ -11,6 +11,8 @@ export type ShelfAction =
   | { type: 'shelf/setDefaultTags'; shelfId: Id; defaultTagNames: string[] }
   /** Adds, changes (lock) or removes (null) a shelf's password. */
   | { type: 'shelf/setLock'; shelfId: Id; lock: ShelfLock | null }
+  /** Screens check with canChangeKind first: the reducer doesn't know which items are books. */
+  | { type: 'shelf/setKind'; shelfId: Id; kind: ShelfKind }
   | { type: 'shelf/move'; shelfId: Id; toIndex: number }
   | { type: 'shelf/remove'; shelfId: Id }
   | { type: 'item/add'; item: Item }
@@ -39,6 +41,9 @@ export function shelfReducer(state: ShelfState, action: ShelfAction): ShelfState
 
     case 'shelf/setLock':
       return updateShelf(state, action.shelfId, ({ lock: _old, ...s }) => (action.lock ? { ...s, lock: action.lock } : s));
+
+    case 'shelf/setKind':
+      return updateShelf(state, action.shelfId, (s) => ({ ...s, kind: action.kind }));
 
     case 'shelf/move': {
       const from = state.shelves.findIndex((s) => s.id === action.shelfId);
