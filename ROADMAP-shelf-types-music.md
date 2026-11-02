@@ -106,7 +106,9 @@ Opening a shelf shows a layout that fits its type. `src/app/index.tsx` is alread
 5. **Multi-file import**: pick a whole album at once. The preview lists the tracks (title, artist, duration) in track-number order, and the user can fix the album or artist for all of them together. Show progress ("Copying 4 of 12"), and clean up on failure like the other imports.
 6. Artist and album become **tags** on the item (decision 6), so the existing search and sorting find them.
 
-## Phase 5 – Music: shelf and player
+## Phase 5 – Music: shelf and player ✅
+
+> **As built:** `PlayerProvider` (in `_layout.tsx`) owns one `useAudioPlaylist` and a matching queue; shuffle is done in the queue, since the playlist has none, and turning it on or off rearranges the songs around the one playing without stopping it. The mini player sits under the screens rather than over them, so it never covers their buttons, and hides in the readers and the player. The queue is saved in the settings table and comes back paused. Positions are saved every 5 s and on pause; songs of 20 minutes or more resume. Deleting a queued song removes it from the queue. Lengths the file didn't give are saved after the first play. Headphones being unplugged is left to the OS for now and needs checking on a phone.
 
 1. **A player that lives above the screens**: a `PlayerProvider` in `src/state/`, mounted in `_layout.tsx`, owns one `AudioPlaylist`. Music keeps playing when the user goes to another shelf or opens a book.
 2. **Music shelf layout** (`MusicShelf`): a song list (cover, title, artist, duration) with "Play all" and "Shuffle". Tapping a song plays it, and the rest of the visible list (after search and sort) becomes the queue.

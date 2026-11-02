@@ -133,9 +133,9 @@ export default function ShelvesScreen() {
       return ids.size === 0 ? null : { ...current, ids };
     });
 
-  // On a reading shelf, tapping a book opens the reader, so its details are reached from here instead.
+  // On a reading or music shelf, tapping a book opens the reader and a song plays, so their details are reached from here.
   const detailsItem =
-    shelf && (shelf.kind === 'novel' || shelf.kind === 'comic') && selectedItems.length === 1 && books.has(selectedItems[0].id)
+    shelf && shelf.kind !== 'collection' && selectedItems.length === 1 && fileKinds.has(selectedItems[0].id)
       ? selectedItems[0]
       : null;
 

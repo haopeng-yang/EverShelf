@@ -66,6 +66,11 @@ import {
   SELECT_SHELVES,
   SELECT_TAGS,
   SELECT_TRACK,
+  SELECT_TRACKS,
+  SELECT_PLAYBACK_POSITION,
+  SET_TRACK_DURATION,
+  UPSERT_PLAYBACK_POSITION,
+  COUNT_PLAY,
   shelfKindColumn,
   shelfLockRepair,
   UPSERT_SETTING,
@@ -184,6 +189,33 @@ export async function loadFileKinds(db: SQLiteDatabase): Promise<Map<Id, FileKin
 export async function loadTrack(db: SQLiteDatabase, itemId: Id): Promise<Track | null> {
   const row = await db.getFirstAsync<TrackRow>(SELECT_TRACK, [itemId]);
   return row ? rowToTrack(row) : null;
+}
+
+/** Every song's track info, by item id. */
+export async function loadTracks(db: SQLiteDatabase): Promise<Map<Id, Track>> {
+  const rows = await db.getAllAsync<TrackRow>(SELECT_TRACKS);
+  return new Map(rows.map((row) => [row.item_id, rowToTrack(row)]));
+}
+
+/** Saves a length the player found out, for songs whose file didn't say. */
+export async function setTrackDuration(db: SQLiteDatabase, itemId: Id, durationMs: number): Promise<void> {
+  await db.runAsync(SET_TRACK_DURATION, [Math.round(durationMs), itemId]);
+}
+
+/** Where a song was stopped, in ms, or null if it never was. */
+export async function loadPlaybackPosition(db: SQLiteDatabase, itemId: Id): Promise<number | null> {
+  const row = await db.getFirstAsync<{ position_ms: number }>(SELECT_PLAYBACK_POSITION, [itemId]);
+  return row?.position_ms ?? null;
+}
+
+export async function savePlaybackPosition(db: SQLiteDatabase, itemId: Id, positionMs: number): Promise<void> {
+  await db.runAsync(UPSERT_PLAYBACK_POSITION, [itemId, Math.round(positionMs), Date.now()]);
+}
+
+/** Counts a play of the song, for "Most played" later. */
+export async function countPlay(db: SQLiteDatabase, itemId: Id): Promise<void> {
+  const now = Date.now();
+  await db.runAsync(COUNT_PLAY, [itemId, now, now]);
 }
 
 export async function saveTrack(db: SQLiteDatabase, track: Track): Promise<void> {

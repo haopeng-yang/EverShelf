@@ -1,8 +1,11 @@
 import { Stack } from 'expo-router';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
+import { View } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
+import { MiniPlayer } from '@/components/music/MiniPlayer';
+import { PlayerProvider } from '@/state/PlayerProvider';
 import { SettingsProvider } from '@/state/SettingsProvider';
 import { ShelfLockProvider } from '@/state/ShelfLockProvider';
 import { ShelfProvider } from '@/state/ShelfProvider';
@@ -17,7 +20,9 @@ export default function RootLayout() {
           <AppThemeProvider>
             <ShelfProvider>
               <ShelfLockProvider>
-                <ThemedStack />
+                <PlayerProvider>
+                  <ThemedStack />
+                </PlayerProvider>
               </ShelfLockProvider>
             </ShelfProvider>
           </AppThemeProvider>
@@ -29,8 +34,9 @@ export default function RootLayout() {
 
 function ThemedStack() {
   const { colors, dark } = useTheme();
+  // The mini player sits under the screens rather than over them, so it never hides their buttons.
   return (
-    <>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.background },
@@ -40,7 +46,8 @@ function ThemedStack() {
           contentStyle: { backgroundColor: colors.background },
         }}
       />
+      <MiniPlayer />
       <StatusBar style={dark ? 'light' : 'dark'} />
-    </>
+    </View>
   );
 }

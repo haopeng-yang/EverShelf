@@ -174,6 +174,14 @@ CREATE TABLE IF NOT EXISTS playback_progress (
 `;
 
 export const SELECT_TRACK = 'SELECT item_id, file_name, format, duration_ms, track_number, disc_number, lyrics FROM tracks WHERE item_id = ?';
+export const SELECT_TRACKS = 'SELECT item_id, file_name, format, duration_ms, track_number, disc_number, lyrics FROM tracks';
+export const SET_TRACK_DURATION = 'UPDATE tracks SET duration_ms = ? WHERE item_id = ?';
+export const SELECT_PLAYBACK_POSITION = 'SELECT position_ms FROM playback_progress WHERE item_id = ?';
+export const UPSERT_PLAYBACK_POSITION = `INSERT INTO playback_progress (item_id, position_ms, updated_at) VALUES (?, ?, ?)
+ON CONFLICT(item_id) DO UPDATE SET position_ms = excluded.position_ms, updated_at = excluded.updated_at`;
+/** Counts one play and when it happened, keeping the saved position. */
+export const COUNT_PLAY = `INSERT INTO playback_progress (item_id, position_ms, updated_at, play_count, last_played_at) VALUES (?, 0, ?, 1, ?)
+ON CONFLICT(item_id) DO UPDATE SET play_count = play_count + 1, last_played_at = excluded.last_played_at`;
 export const INSERT_TRACK = `INSERT INTO tracks (item_id, file_name, format, duration_ms, track_number, disc_number, lyrics)
 VALUES (?, ?, ?, ?, ?, ?, ?)`;
 /** What kind of file every item with one is: a book (text or comic) or a song. */

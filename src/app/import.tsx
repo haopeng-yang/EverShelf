@@ -26,6 +26,7 @@ import { NotFound } from '@/components/NotFound';
 import { TextField } from '@/components/TextField';
 import type { Translate } from '@/i18n';
 import { useT } from '@/i18n/useT';
+import { durationLabel } from '@/models/queue';
 import type { ReadingMode, Shelf } from '@/models/types';
 import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
@@ -351,14 +352,6 @@ export default function ImportScreen() {
 /** The value every song shares, or '' if they differ. */
 function shared(values: string[]): string {
   return values.every((v) => v === values[0]) ? (values[0] ?? '') : '';
-}
-
-/** "3:05", or "1:02:09" for an hour or more. */
-function durationLabel(ms: number): string {
-  const total = Math.round(ms / 1000);
-  const [h, m, sec] = [Math.floor(total / 3600), Math.floor((total % 3600) / 60), total % 60];
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
 }
 
 interface SongsPreviewProps {
