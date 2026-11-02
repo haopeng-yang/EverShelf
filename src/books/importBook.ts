@@ -1,4 +1,5 @@
 import { File } from 'expo-file-system';
+import { Platform } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { fillTags, newItemDraft } from '../models/actions';
@@ -36,8 +37,11 @@ export async function pickBookFile(): Promise<PickedBookFile | null> {
   // reading expo-document-picker's result with File was refused on Android
   // ("missing READ permission"). Any type is accepted, since some file
   // managers report book files as octet-stream; detectFormat checks the file.
-  // These are the user's own files, so they are only read, never deleted.
+  // On Android these are the user's own files, so they are only read, never
+  // deleted. On iOS the picker hands over copies in the app's temp folder,
+  // which are deleted once read (iOS clears any left behind on its own).
   const picked = await File.pickFileAsync({ mimeTypes: '*/*', multipleFiles: true });
+  const pickedAreCopies = Platform.OS === 'ios';
   if (picked.canceled || !picked.result || picked.result.length === 0) return null;
   // A content link's "name" is an id like "msf:1000033298"; don't show that as a file name.
   const names = picked.result.map((file) => (hasExtension(file.name) ? file.name : ''));
@@ -46,15 +50,17 @@ export async function pickBookFile(): Promise<PickedBookFile | null> {
     for (const file of picked.result) {
       if ((await formatOf(file)) !== 'comic') throw new MixedFilesError();
     }
-    return { kind: 'comic', name: names.filter(Boolean).join(', '), comic: await openComic(picked.result) };
+    const comic = await openComic(picked.result, pickedAreCopies);
+    return { kind: 'comic', name: names.filter(Boolean).join(', '), comic };
   }
 
   const [file] = picked.result;
   const [name] = names;
   const format = await formatOf(file);
   if (!format) throw new UnsupportedFileError(name);
-  if (format === 'comic') return { kind: 'comic', name, comic: await openComic([file]) };
+  if (format === 'comic') return { kind: 'comic', name, comic: await openComic([file], pickedAreCopies) };
   const bytes = await readBytes(file);
+  if (pickedAreCopies) deleteQuietly(file);
   if (format === 'epub') return { kind: 'epub', name, book: parseEpub(bytes) };
   const { text, encoding } = decodeText(bytes);
   return { kind: 'txt', name, text, encoding };
@@ -89,6 +95,14 @@ async function readHead(file: File): Promise<Uint8Array> {
   } catch {
     // Providers that can't be opened this way: fall back to reading it all, as before.
     return (await readBytes(file)).subarray(0, 4096);
+  }
+}
+
+function deleteQuietly(file: File): void {
+  try {
+    if (file.exists) file.delete();
+  } catch (error) {
+    console.warn('Could not delete a picked file copy', file.uri, error);
   }
 }
 

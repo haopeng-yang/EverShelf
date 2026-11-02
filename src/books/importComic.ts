@@ -69,12 +69,13 @@ export interface PickedComic {
 /**
  * Reads the list of pages in one or more ZIP/CBZ files picked together. Several
  * files become one comic with a chapter per file (sorted by name when the names
- * are known; in the picked order otherwise).
+ * are known; in the picked order otherwise). With pickedAreCopies (iOS), the
+ * picked files belong to the app and disposeComic deletes them too.
  */
-export async function openComic(picked: File[]): Promise<PickedComic> {
+export async function openComic(picked: File[], pickedAreCopies = false): Promise<PickedComic> {
   const files: ComicFile[] = [];
   try {
-    for (const file of picked) files.push(await openComicFile(file));
+    for (const file of picked) files.push(await openComicFile(file, pickedAreCopies));
     if (files.every((f) => f.name)) files.sort((a, b) => naturalCompare(a.name, b.name));
 
     const first = files[0];
@@ -114,7 +115,7 @@ export async function openComic(picked: File[]): Promise<PickedComic> {
   }
 }
 
-/** Deletes any cache copies made while picking. Safe to call more than once. */
+/** Deletes any cache copies made while picking (and iOS's picked copies). Safe to call more than once. */
 export function disposeComic(comic: PickedComic): void {
   disposeFiles(comic.files);
 }
@@ -193,14 +194,17 @@ export async function zipEntryNames(file: File): Promise<string[]> {
   return [...opened.entries.keys()];
 }
 
-async function openComicFile(file: File): Promise<ComicFile> {
+async function openComicFile(file: File, pickedIsCopy = false): Promise<ComicFile> {
   const name = hasExtension(file.name) ? file.name : '';
   const opened = await openReadable(file);
+  // A cache copy of an app-owned copy: only the cache copy is needed from here on.
+  if (opened.temporary && pickedIsCopy) deleteQuietly(file);
+  const temporary = opened.temporary || pickedIsCopy;
   try {
     const entries = await withSource(opened.file, readZipEntries);
-    return { file: opened.file, name, entries: new Map(entries.map((e) => [e.name, e])), temporary: opened.temporary };
+    return { file: opened.file, name, entries: new Map(entries.map((e) => [e.name, e])), temporary };
   } catch (error) {
-    if (opened.temporary) deleteQuietly(opened.file);
+    if (temporary) deleteQuietly(opened.file);
     throw error;
   }
 }

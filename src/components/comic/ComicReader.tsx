@@ -211,7 +211,8 @@ export function ComicReader({ itemId }: { itemId: string }) {
 
   return (
     <View style={styles.container} onLayout={(e) => setSize(e.nativeEvent.layout)}>
-      <Stack.Screen options={{ headerShown: false }} />
+      {/* iOS's swipe-from-the-edge back gesture would fight sideways page turns. */}
+      <Stack.Screen options={{ headerShown: false, gestureEnabled: !paged }} />
       <StatusBar style="light" hidden={!controlsVisible} />
 
       {failed || (comic && total === 0) ? (

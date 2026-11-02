@@ -14,7 +14,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.haopengyang.evershelf",
-      "infoPlist": {}
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.haopengyang.evershelf",

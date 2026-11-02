@@ -50,6 +50,8 @@
     "test:watch": "jest --watchAll",
     "lint": "expo lint",
     "build:android": "npx eas-cli@latest build --platform android --profile production",
+    "build:ios": "npx eas-cli@latest build --platform ios --profile production",
+    "submit:ios": "npx eas-cli@latest submit --platform ios --latest",
     "update": "npx eas-cli@latest update --channel production --environment production"
   },
   "jest": {
