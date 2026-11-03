@@ -2,7 +2,7 @@
 // run the same SQL against Node's built-in SQLite.
 
 /** Bump this and add a step in database.ts `migrate` whenever the tables change. */
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 
 export const CREATE_TABLES_V1 = `
 CREATE TABLE shelves (
@@ -194,8 +194,27 @@ export function migrateV11(progressColumns: string[]): string[] {
   ];
 }
 
-export const SELECT_VIDEO = 'SELECT item_id, file_name, format, duration_ms, width, height FROM videos WHERE item_id = ?';
-export const INSERT_VIDEO = 'INSERT INTO videos (item_id, file_name, format, duration_ms, width, height) VALUES (?, ?, ?, ?, ?, ?)';
+/**
+ * Version 12: which subtitle and audio track the user last picked for each
+ * video. Given the videos table's column names, returns the statements that
+ * add whichever are missing (see the version 7 note).
+ */
+export function migrateV12(videoColumns: string[]): string[] {
+  return ['subtitle_choice', 'audio_choice']
+    .filter((column) => !videoColumns.includes(column))
+    .map((column) => `ALTER TABLE videos ADD COLUMN ${column} TEXT`);
+}
+
+export const SELECT_VIDEO =
+  'SELECT item_id, file_name, format, duration_ms, width, height, subtitle_choice, audio_choice FROM videos WHERE item_id = ?';
+export const SET_SUBTITLE_CHOICE = 'UPDATE videos SET subtitle_choice = ? WHERE item_id = ?';
+export const SET_AUDIO_CHOICE = 'UPDATE videos SET audio_choice = ? WHERE item_id = ?';
+/** Marks a video watched (and back to the start) or not watched, by hand. */
+export const SET_VIDEO_FINISHED = `INSERT INTO playback_progress (item_id, position_ms, updated_at, finished_at) VALUES (?, 0, ?, ?)
+ON CONFLICT(item_id) DO UPDATE SET updated_at = excluded.updated_at, finished_at = excluded.finished_at,
+  position_ms = CASE WHEN excluded.finished_at IS NULL THEN position_ms ELSE 0 END`;
+export const INSERT_VIDEO = `INSERT INTO videos (item_id, file_name, format, duration_ms, width, height, subtitle_choice, audio_choice)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
 export const SET_VIDEO_DURATION = 'UPDATE videos SET duration_ms = ? WHERE item_id = ?';
 /** Every video, with how far it has been watched. */
 export const SELECT_VIDEO_SUMMARIES = `

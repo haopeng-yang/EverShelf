@@ -57,6 +57,8 @@ export interface VideoRow {
   duration_ms: number | null;
   width: number | null;
   height: number | null;
+  subtitle_choice: string | null;
+  audio_choice: string | null;
 }
 
 /** A row of SELECT_VIDEO_SUMMARIES: the progress columns are null for a video never played. */
@@ -310,6 +312,8 @@ export function rowToVideo(row: VideoRow): Video {
     durationMs: row.duration_ms,
     width: row.width,
     height: row.height,
+    subtitleChoice: row.subtitle_choice,
+    audioChoice: row.audio_choice,
   };
 }
 

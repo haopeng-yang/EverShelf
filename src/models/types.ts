@@ -126,6 +126,9 @@ export interface Video {
   /** Picture size in pixels, or null if the file doesn't say. */
   width: number | null;
   height: number | null;
+  /** The subtitle and audio tracks last picked (see trackKey; 'off' for no subtitles), or null for the file's own default. */
+  subtitleChoice: string | null;
+  audioChoice: string | null;
 }
 
 /** What the video shelf needs to know about a video: its length and how far it has been watched. */

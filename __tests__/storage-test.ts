@@ -44,6 +44,9 @@ import {
   MIGRATE_V8,
   MIGRATE_V10,
   migrateV11 as migrateV11Statements,
+  migrateV12 as migrateV12Statements,
+  SET_SUBTITLE_CHOICE,
+  SET_VIDEO_FINISHED,
   FINISH_VIDEO,
   SAVE_WATCH_POSITION,
   SELECT_VIDEO,
@@ -101,6 +104,13 @@ function migrateAll(db: DatabaseSync) {
   migrateV9(db);
   db.exec(MIGRATE_V10);
   migrateV11(db);
+  migrateV12(db);
+}
+
+/** The version 12 upgrade, as migrate() in database.ts runs it. */
+function migrateV12(db: DatabaseSync) {
+  const columns = db.prepare('PRAGMA table_info(videos)').all().map((c) => String(c.name));
+  for (const sql of migrateV12Statements(columns)) db.exec(sql);
 }
 
 /** The version 11 upgrade, as migrate() in database.ts runs it. */
@@ -630,7 +640,16 @@ describe('Video storage', () => {
     let state = createDefaultState();
     state = dispatch(db, state, addItem(state.shelves.find((s) => s.id === 'videos')!, 'Holiday'));
     const itemId = state.items[0].id;
-    const video: Video = { itemId, fileName: 'video.mp4', format: 'mp4', durationMs: 90000, width: 1920, height: 1080 };
+    const video: Video = {
+      itemId,
+      fileName: 'video.mp4',
+      format: 'mp4',
+      durationMs: 90000,
+      width: 1920,
+      height: 1080,
+      subtitleChoice: null,
+      audioChoice: 'en|English',
+    };
     run(db, [insertVideoStatement(video)]);
     return { db, state, itemId, video };
   }
@@ -672,9 +691,27 @@ describe('Video storage', () => {
     expect(loadSummary(db, itemId)).toMatchObject({ positionMs: 5000, finished: false });
   });
 
-  it('an unknown stored format loads as mp4, and version 11 can run twice', () => {
+  it('remembers the picked subtitles, and marks a video watched or not by hand', () => {
+    const { db, itemId } = withVideo();
+    db.prepare(SET_SUBTITLE_CHOICE).run('off', itemId);
+    expect(loadVideo(db, itemId)).toMatchObject({ subtitleChoice: 'off', audioChoice: 'en|English' });
+
+    db.prepare(SAVE_WATCH_POSITION).run(itemId, 42000, 10, 10);
+    db.prepare(SET_VIDEO_FINISHED).run(itemId, 20, 20);
+    expect(loadSummary(db, itemId)).toMatchObject({ positionMs: 0, finished: true, lastWatchedAt: 10 });
+    db.prepare(SET_VIDEO_FINISHED).run(itemId, 30, null);
+    expect(loadSummary(db, itemId)).toMatchObject({ positionMs: 0, finished: false });
+
+    // A video never played can be marked too.
+    const other = withVideo();
+    other.db.prepare(SET_VIDEO_FINISHED).run(other.itemId, 5, 5);
+    expect(loadSummary(other.db, other.itemId)).toMatchObject({ finished: true, lastWatchedAt: null });
+  });
+
+  it('an unknown stored format loads as mp4, and versions 11 and 12 can run twice', () => {
     const { db, itemId } = withVideo();
     migrateV11(db);
+    migrateV12(db);
     db.prepare("UPDATE videos SET format = 'hologram' WHERE item_id = ?").run(itemId);
     expect(loadVideo(db, itemId)?.format).toBe('mp4');
   });

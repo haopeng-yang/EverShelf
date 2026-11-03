@@ -15,7 +15,7 @@ import type { VideoSummary } from '@/models/types';
 import { resumePosition } from '@/models/videos';
 import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfState } from '@/state/ShelfProvider';
-import { loadChapters, loadProgress, loadVideoSummaries } from '@/storage/database';
+import { loadChapters, loadProgress, loadVideoSummaries, setVideoFinished } from '@/storage/database';
 import { fontSize, makeStyles, spacing } from '@/theme';
 
 /** Wider than this, the cover sits beside the details (as in the sketch); narrower, above them. */
@@ -66,6 +66,18 @@ export default function ItemScreen() {
   const shelf = state.shelves.find((s) => s.id === item.shelfId);
   const sideBySide = width >= SIDE_BY_SIDE_MIN_WIDTH;
   const resumeAt = video ? resumePosition(video.positionMs, video.durationMs) : 0;
+
+  async function toggleWatched() {
+    if (!video) return;
+    const finished = !video.finished;
+    try {
+      await setVideoFinished(db, video.itemId, finished);
+      // Marking it watched moves it back to the start, as finishing it does.
+      setVideo({ ...video, finished, positionMs: finished ? 0 : video.positionMs });
+    } catch (error) {
+      console.warn('Could not mark the video', error);
+    }
+  }
   const videoDetails = video
     ? [
         video.durationMs !== null ? durationLabel(video.durationMs) : '',
@@ -95,6 +107,15 @@ export default function ItemScreen() {
             </Text>
           )}
           {videoDetails.length > 0 && <Text style={styles.chapters}>{videoDetails.join(' · ')}</Text>}
+          {video && (
+            <Button
+              title={video.finished ? t('item.markUnwatched') : t('item.markWatched')}
+              variant="text"
+              compact
+              style={styles.alignStart}
+              onPress={() => void toggleWatched()}
+            />
+          )}
         </View>
       </View>
 
@@ -155,6 +176,7 @@ const useStyles = makeStyles((c) => ({
   column: { gap: spacing.xl },
   coverSide: { width: 200 },
   coverTop: { alignSelf: 'center' },
+  alignStart: { alignSelf: 'flex-start' },
   fields: { gap: spacing.lg },
   fieldsSide: { flex: 1 },
   field: { gap: spacing.xs },

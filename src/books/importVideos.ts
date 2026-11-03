@@ -146,6 +146,8 @@ export async function saveImportedVideos(
         durationMs,
         width: video.info.width,
         height: video.info.height,
+        subtitleChoice: null,
+        audioChoice: null,
       };
       await saveVideo(db, row);
       items.push(item);

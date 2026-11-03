@@ -57,6 +57,10 @@ import {
   MIGRATE_V8,
   MIGRATE_V10,
   migrateV11,
+  migrateV12,
+  SET_AUDIO_CHOICE,
+  SET_SUBTITLE_CHOICE,
+  SET_VIDEO_FINISHED,
   SCHEMA_VERSION,
   FINISH_VIDEO,
   SAVE_WATCH_POSITION,
@@ -148,7 +152,11 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
       const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(playback_progress)');
       for (const sql of migrateV11(columns.map((c) => c.name))) await db.execAsync(sql);
     }
-    // Future upgrades go here: if (version < 12) { ... }
+    if (version < 12) {
+      const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(videos)');
+      for (const sql of migrateV12(columns.map((c) => c.name))) await db.execAsync(sql);
+    }
+    // Future upgrades go here: if (version < 13) { ... }
 
     // Seed the starting shelves only on a fresh install, so shelves the user
     // deletes later don't come back. They're named in the phone's language.
@@ -261,6 +269,17 @@ export async function setVideoDuration(db: SQLiteDatabase, itemId: Id, durationM
 export async function saveWatchPosition(db: SQLiteDatabase, itemId: Id, positionMs: number): Promise<void> {
   const now = Date.now();
   await db.runAsync(SAVE_WATCH_POSITION, [itemId, Math.round(positionMs), now, now]);
+}
+
+/** Marks a video watched or not watched by hand. Marking it watched also moves it back to the start. */
+export async function setVideoFinished(db: SQLiteDatabase, itemId: Id, finished: boolean): Promise<void> {
+  const now = Date.now();
+  await db.runAsync(SET_VIDEO_FINISHED, [itemId, now, finished ? now : null]);
+}
+
+/** Remembers the subtitle or audio track picked for a video (a trackKey, or TRACK_OFF for no subtitles). */
+export async function saveTrackChoice(db: SQLiteDatabase, itemId: Id, kind: 'subtitle' | 'audio', choice: string): Promise<void> {
+  await db.runAsync(kind === 'subtitle' ? SET_SUBTITLE_CHOICE : SET_AUDIO_CHOICE, [choice, itemId]);
 }
 
 /** A video was played to the end: marks it watched and counts a play. */

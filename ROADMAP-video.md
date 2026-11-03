@@ -84,7 +84,9 @@ A fifth shelf type, **Video**, for films, episodes and clips the user already ha
 
 ✅ **After Phase 4, video works in Expo Go** while the app is open.
 
-## Phase 5 – Watching comfort
+## Phase 5 – Watching comfort ✅ (except the optional .srt)
+
+> **As built:** a control row under the video: −10 s, speed (0.5×–2×), +10 s, and CC / ♪ when the file has subtitles or more than one audio track. **Double-tap to skip was left out**: anything laid over the native controls steals their taps, so it waits for custom controls. Migration **V12** adds `subtitle_choice` and `audio_choice` to `videos`; tracks are remembered by language and label (`trackKey`), because the player's track ids change between loads. "Up next" follows the shelf's current sort order (`nextVideo`), counts down 5 s, or waits for a tap when the new "Play the next video automatically" setting is off; playing again cancels it. Mark watched / not watched is on the details screen only, since the selection bar already has four buttons. Speed resets for each video. Still to check on phones: subtitles in .mkv files, and whether Android's fullscreen (where JS pauses) shows Up next only after leaving fullscreen.
 
 * **Speed** (0.5×–2×), **skip ±10 s** buttons and **double-tap left/right to skip**, as in other players.
 * **Next up**: at the end of a video, offer the next one on the shelf (in the shelf's sort order) with a 5-second countdown; a setting turns autoplay off.

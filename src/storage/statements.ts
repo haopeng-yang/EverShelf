@@ -182,7 +182,16 @@ export function insertBookmarkStatement(bookmark: Bookmark): Statement {
 export function insertVideoStatement(video: Video): Statement {
   return {
     sql: INSERT_VIDEO,
-    params: [video.itemId, video.fileName, video.format, video.durationMs, video.width, video.height],
+    params: [
+      video.itemId,
+      video.fileName,
+      video.format,
+      video.durationMs,
+      video.width,
+      video.height,
+      video.subtitleChoice,
+      video.audioChoice,
+    ],
   };
 }
 

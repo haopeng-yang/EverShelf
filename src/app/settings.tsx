@@ -117,6 +117,16 @@ export default function SettingsScreen() {
             onValueChange={(value) => setSetting('showContinueReading', value)}
           />
         </View>
+        <View style={styles.switchRow}>
+          <View style={styles.switchText}>
+            <Text style={styles.switchLabel}>{t('settings.autoplayNextVideo')}</Text>
+            <Text style={styles.hint}>{t('settings.autoplayNextVideoHint')}</Text>
+          </View>
+          <Switch
+            value={settings.autoplayNextVideo}
+            onValueChange={(value) => setSetting('autoplayNextVideo', value)}
+          />
+        </View>
       </View>
 
       <View style={styles.section}>

@@ -20,6 +20,8 @@ export interface Settings extends ReaderSettings {
   language: LanguageSetting;
   /** Whether a shelf shows its "Continue reading" row above the items. */
   showContinueReading: boolean;
+  /** Whether the next video on the shelf starts by itself when one ends. */
+  autoplayNextVideo: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -28,6 +30,7 @@ const DEFAULT_SETTINGS: Settings = {
   viewMode: 'grid',
   language: 'system',
   showContinueReading: true,
+  autoplayNextVideo: true,
   ...DEFAULT_READER_SETTINGS,
 };
 
@@ -83,6 +86,7 @@ function parseSettings(stored: Record<string, string>): Settings {
     sortOrder: SORT_ORDERS.find((o) => o === stored.sortOrder) ?? DEFAULT_SETTINGS.sortOrder,
     viewMode: viewModes.find((m) => m === stored.viewMode) ?? DEFAULT_SETTINGS.viewMode,
     showContinueReading: stored.showContinueReading !== 'false',
+    autoplayNextVideo: stored.autoplayNextVideo !== 'false',
     ...parseReaderSettings(stored),
   };
 }
