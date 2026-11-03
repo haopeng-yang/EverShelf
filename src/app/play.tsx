@@ -30,7 +30,6 @@ export default function PlayerScreen() {
   }
 
   const nextRepeat = REPEAT_MODES[(REPEAT_MODES.indexOf(repeat) + 1) % REPEAT_MODES.length];
-  const atEnd = current >= queue.length - 1 && repeat !== 'all';
 
   return (
     <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}>
@@ -65,7 +64,7 @@ export default function PlayerScreen() {
           big
           onPress={player.togglePlay}
         />
-        <Control label={t('player.next')} symbol="⏭" disabled={atEnd} onPress={player.next} />
+        <Control label={t('player.next')} symbol="⏭" onPress={player.next} />
         <Control
           label={t(`player.repeat.${repeat}`)}
           symbol={repeat === 'one' ? '🔂' : '🔁'}

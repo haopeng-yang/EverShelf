@@ -317,7 +317,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       repeat,
       playQueue,
       togglePlay: () => (status.playing ? playlist.pause() : playlist.play()),
-      next: () => playlist.next(),
+      // Past the last song, "next" starts the queue again from the first, whatever the repeat mode.
+      next: () => {
+        if (current < queue.length - 1) return playlist.next();
+        playlist.skipTo(0);
+        playlist.play();
+      },
       // Like most players: past the first few seconds, "previous" goes back to the start of the song.
       previous: () => (status.currentTime > 3 || current <= 0 ? void playlist.seekTo(0) : playlist.previous()),
       skipTo: (index: number) => {
