@@ -54,6 +54,8 @@ interface PlayerContextValue {
   setShuffle: (on: boolean) => void;
   setRepeat: (mode: RepeatMode) => void;
   removeAt: (index: number) => void;
+  /** Stops playing and empties the queue, which hides the mini player and the lock-screen controls. */
+  stop: () => void;
   /** Moves a song that isn't playing to another place in the queue. */
   move: (from: number, to: number) => void;
 }
@@ -179,6 +181,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     },
     [playlist],
   );
+
+  const stop = useCallback(() => {
+    playlist.pause();
+    playlist.clear();
+    ordered.current = [];
+    setQueue([]);
+  }, [playlist]);
 
   const removeAt = useCallback(
     (index: number) => {
@@ -319,9 +328,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setShuffle,
       setRepeat,
       removeAt,
+      stop,
       move,
     }),
-    [queue, current, status, shuffle, repeat, playQueue, playlist, setShuffle, setRepeat, removeAt, move],
+    [queue, current, status, shuffle, repeat, playQueue, playlist, setShuffle, setRepeat, removeAt, stop, move],
   );
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
 }

@@ -9,8 +9,8 @@ import { fontSize, makeStyles, radius, spacing } from '@/theme';
 import { Cover } from '../Cover';
 
 /**
- * The song that's loaded, with play/pause and next, along the bottom of the
- * app. Tapping it opens the full player. Hidden in the readers and on the
+ * The song that's loaded, with play/pause, next and close, along the bottom
+ * of the app. Close stops the music and empties the queue. Tapping it opens the full player. Hidden in the readers and on the
  * player itself, and while the queue is empty.
  */
 export function MiniPlayer() {
@@ -18,7 +18,7 @@ export function MiniPlayer() {
   const t = useT();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
-  const { queue, current, status, togglePlay, next } = usePlayer();
+  const { queue, current, status, togglePlay, next, stop } = usePlayer();
   const entry = queue[current];
   if (!entry || pathname === '/play' || pathname.startsWith('/read')) return null;
   const progress = status.duration > 0 ? Math.min(1, status.currentTime / status.duration) : 0;
@@ -62,6 +62,14 @@ export function MiniPlayer() {
         onPress={next}>
         <Text style={styles.controlText}>⏭</Text>
       </Pressable>
+      <Pressable
+        style={({ pressed }) => [styles.control, pressed && styles.pressed]}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t('player.close')}
+        onPress={stop}>
+        <Text style={styles.closeText}>✕</Text>
+      </Pressable>
     </View>
   );
 }
@@ -87,4 +95,5 @@ const useStyles = makeStyles((c) => ({
   artist: { fontSize: fontSize.small, color: c.textMuted },
   control: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   controlText: { fontSize: fontSize.heading, color: c.text },
+  closeText: { fontSize: fontSize.body, color: c.textMuted },
 }));

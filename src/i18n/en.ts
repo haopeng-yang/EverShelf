@@ -369,6 +369,7 @@ export const en = {
   'player.play': 'Play',
   'player.pause': 'Pause',
   'player.next': 'Next song',
+  'player.close': 'Stop and close the player',
   'player.previous': 'Previous song',
   'player.open': 'Now playing: {title}. Open the player',
   'player.seek': 'Position in the song',

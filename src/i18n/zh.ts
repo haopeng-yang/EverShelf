@@ -337,6 +337,7 @@ export const zh: Translations = {
   'player.play': '播放',
   'player.pause': '暂停',
   'player.next': '下一首',
+  'player.close': '停止并关闭播放器',
   'player.previous': '上一首',
   'player.open': '正在播放：{title}。打开播放器',
   'player.seek': '歌曲进度',
