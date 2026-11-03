@@ -4,7 +4,9 @@ import { Stack, router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, Text, View, type ListViewToken } from 'react-native';
+import { ActivityIndicator, Text, View, type FlatList as RNFlatList, type ListViewToken } from 'react-native';
+// The gesture handler's list, so pinching a page and scrolling the list take turns properly.
+import { FlatList } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { bookPages, chapterStarts, comicPercent, startPage, stripOffsets, type BookPage } from '@/books/comic/comicProgress';
@@ -31,6 +33,7 @@ import {
 import { fontSize, makeStyles, spacing } from '@/theme';
 
 import { PageSlider } from './PageSlider';
+import { ZoomablePage } from './ZoomablePage';
 
 const KEEP_AWAKE_TAG = 'comic-reader';
 /** Wait this long after the page stops changing before saving the position. */
@@ -49,7 +52,8 @@ interface LoadedComic {
  * Reads a comic page by page (left to right, or right to left for manga) or
  * as one long vertical strip (webtoons). In page modes, tap the left or right
  * third of the screen to turn the page, or swipe; tap the middle for the
- * controls. The page is saved as you read and restored next time.
+ * controls. Pinch with two fingers to zoom a page. The page is saved as you
+ * read and restored next time.
  */
 export function ComicReader({ itemId }: { itemId: string }) {
   const db = useSQLiteContext();
@@ -69,7 +73,9 @@ export function ComicReader({ itemId }: { itemId: string }) {
   const [controlsVisible, setControlsVisible] = useState(false);
   const [contentsOpen, setContentsOpen] = useState(false);
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
-  const listRef = useRef<FlatList<BookPage>>(null);
+  /** A page is zoomed in, so dragging moves it rather than scrolling the list. */
+  const [zoomed, setZoomed] = useState(false);
+  const listRef = useRef<RNFlatList<BookPage>>(null);
 
   // Load the chapters, pages, reading mode and where the reader left off.
   useEffect(() => {
@@ -182,6 +188,7 @@ export function ComicReader({ itemId }: { itemId: string }) {
   const changeMode = (next: ReadingMode) => {
     if (!comic || next === comic.mode) return;
     setComic({ ...comic, mode: next });
+    setZoomed(false);
     setReadingMode(db, itemId, next).catch((error: unknown) => console.warn('Could not save reading mode', error));
   };
 
@@ -194,8 +201,8 @@ export function ComicReader({ itemId }: { itemId: string }) {
     );
   };
 
-  const renderPage = (bookPage: BookPage, width: number, height: number, onPress: (x: number) => void) => (
-    <Pressable style={{ width, height }} onPress={(e) => onPress(e.nativeEvent.locationX)}>
+  const renderPage = (bookPage: BookPage, width: number, height: number, active: boolean, onPress: (x: number) => void) => (
+    <ZoomablePage width={width} height={height} active={active} onTap={onPress} onZoomChange={setZoomed}>
       <Image
         source={{ uri: pageUri(itemId, bookPage.fileName) ?? undefined }}
         style={styles.fill}
@@ -206,7 +213,7 @@ export function ComicReader({ itemId }: { itemId: string }) {
         transition={null}
         accessibilityLabel={t('comicReader.pageLabel', { n: bookPage.index + 1, total })}
       />
-    </Pressable>
+    </ZoomablePage>
   );
 
   return (
@@ -234,6 +241,7 @@ export function ComicReader({ itemId }: { itemId: string }) {
           keyExtractor={(p) => p.fileName}
           horizontal
           pagingEnabled
+          scrollEnabled={!zoomed}
           showsHorizontalScrollIndicator={false}
           getItemLayout={(_, index) => ({ length: size.width, offset: size.width * index, index })}
           initialScrollIndex={toSlot(current)}
@@ -246,7 +254,7 @@ export function ComicReader({ itemId }: { itemId: string }) {
             const slot = Math.round(e.nativeEvent.contentOffset.x / size.width);
             setCurrent(rtl ? total - 1 - slot : slot);
           }}
-          renderItem={({ item: p }) => renderPage(p, size.width, size.height, tapPage)}
+          renderItem={({ item: p }) => renderPage(p, size.width, size.height, p.index === current, tapPage)}
         />
       ) : (
         <FlatList
@@ -258,11 +266,12 @@ export function ComicReader({ itemId }: { itemId: string }) {
           initialScrollIndex={current}
           initialNumToRender={2}
           windowSize={7}
+          scrollEnabled={!zoomed}
           onScrollBeginDrag={() => setControlsVisible(false)}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={VIEWABILITY}
           renderItem={({ item: p, index }) =>
-            renderPage(p, size.width, offsets[index + 1] - offsets[index], () => setControlsVisible((v) => !v))
+            renderPage(p, size.width, offsets[index + 1] - offsets[index], true, () => setControlsVisible((v) => !v))
           }
         />
       )}

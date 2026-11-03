@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { MiniPlayer } from '@/components/music/MiniPlayer';
@@ -14,21 +15,23 @@ import { AppThemeProvider, useTheme } from '@/theme';
 
 export default function RootLayout() {
   return (
-    <KeyboardProvider>
-      <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrate}>
-        <SettingsProvider>
-          <AppThemeProvider>
-            <ShelfProvider>
-              <ShelfLockProvider>
-                <PlayerProvider>
-                  <ThemedStack />
-                </PlayerProvider>
-              </ShelfLockProvider>
-            </ShelfProvider>
-          </AppThemeProvider>
-        </SettingsProvider>
-      </SQLiteProvider>
-    </KeyboardProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <KeyboardProvider>
+        <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrate}>
+          <SettingsProvider>
+            <AppThemeProvider>
+              <ShelfProvider>
+                <ShelfLockProvider>
+                  <PlayerProvider>
+                    <ThemedStack />
+                  </PlayerProvider>
+                </ShelfLockProvider>
+              </ShelfProvider>
+            </AppThemeProvider>
+          </SettingsProvider>
+        </SQLiteProvider>
+      </KeyboardProvider>
+    </GestureHandlerRootView>
   );
 }
 
