@@ -197,7 +197,8 @@ export default function ImportScreen() {
         shelf,
         picked.songs.map((song) => ({
           song,
-          title: song.title,
+          // No title tag and no file name (an Android content link): the user can rename it later.
+          title: song.title || t('import.untitledSong'),
           tagValues: {
             [t('tag.artist')]: songArtist ?? song.info.artist,
             [t('tag.album')]: songAlbum ?? song.info.album,
@@ -394,7 +395,7 @@ function SongsPreview({ picked, artist, album, onChangeArtist, onChangeAlbum }: 
               <Text style={styles.trackNumber}>{song.trackNumber ?? '–'}</Text>
               <View style={styles.songText}>
                 <Text style={styles.chapterTitle} numberOfLines={1}>
-                  {song.title || t('import.noFileName')}
+                  {song.title || t('import.untitledSong')}
                 </Text>
                 {(artist ?? song.info.artist) !== '' && (
                   <Text style={styles.songArtist} numberOfLines={1}>

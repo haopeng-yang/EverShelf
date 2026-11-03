@@ -320,6 +320,7 @@ export const zh: Translations = {
   'home.emptyMusic': '{shelf}里还没有内容。点击“导入歌曲”来添加。',
   'import.songs': '{count} 首歌曲',
   'import.songsMixed': '每首歌不同',
+  'import.untitledSong': '未命名歌曲',
   'import.songsSharedHint': '在这里输入艺术家或专辑，会用于所有歌曲。保持不变则保留每首歌自己的信息。',
   'import.songsSkipped': '已跳过：{files}。',
   'import.reasonNotSong': '不是歌曲',

@@ -1,7 +1,7 @@
 import { Stack, router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { BackHandler, Platform, Text, View } from 'react-native';
+import { BackHandler, Platform, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -42,6 +42,7 @@ export default function ShelvesScreen() {
   const t = useT();
   const sortOptions = SORT_ORDERS.map((value) => ({ value, label: t(`sort.${value}`) }));
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const [selectedId, setSelectedId] = useState<Id | undefined>(state.shelves[0]?.id);
   const [query, setQuery] = useState('');
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
@@ -138,6 +139,13 @@ export default function ShelvesScreen() {
     shelf && shelf.kind !== 'collection' && selectedItems.length === 1 && fileKinds.has(selectedItems[0].id)
       ? selectedItems[0]
       : null;
+  // The selection bar splits its width evenly between its buttons, whatever their labels. (flex: 1
+  // let long labels push the others aside on Android, squeezing "Details" and "Cancel" to one letter a line.)
+  const barButtons = detailsItem ? 4 : 3;
+  const selectionButtonStyle = [
+    styles.selectionButton,
+    { width: (width - spacing.lg * 2 - spacing.sm * (barButtons - 1)) / barButtons },
+  ];
 
   async function deleteSelected() {
     const picked = selectedItems;
@@ -287,20 +295,20 @@ export default function ShelvesScreen() {
               <Button
                 title={t('common.delete')}
                 variant="danger"
-                style={styles.selectionButton}
+                style={selectionButtonStyle}
                 onPress={() => void deleteSelected()}
               />
               <Button
                 title={t('select.move')}
                 variant="primary"
                 disabled={state.shelves.length < 2}
-                style={styles.selectionButton}
+                style={selectionButtonStyle}
                 onPress={() => openMoveSheet(selectedItems)}
               />
               {detailsItem && (
-                <Button title={t('select.details')} style={styles.selectionButton} onPress={() => openDetails(detailsItem)} />
+                <Button title={t('select.details')} style={selectionButtonStyle} onPress={() => openDetails(detailsItem)} />
               )}
-              <Button title={t('common.cancel')} style={styles.selectionButton} onPress={clearSelection} />
+              <Button title={t('common.cancel')} style={selectionButtonStyle} onPress={clearSelection} />
             </View>
           ) : (
             <View style={[styles.fabRow, { bottom: insets.bottom + spacing.lg }]}>
@@ -381,8 +389,7 @@ const useStyles = makeStyles((c) => ({
     borderTopColor: c.border,
     backgroundColor: c.background,
   },
-  // Buttons share the bar's width evenly, whatever their labels.
-  selectionButton: { flex: 1, minWidth: 0, paddingHorizontal: spacing.xs },
+  selectionButton: { paddingHorizontal: spacing.xs },
   fab: {
     borderRadius: 28,
     shadowColor: '#000',
