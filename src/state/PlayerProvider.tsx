@@ -9,6 +9,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import {
+  albumOf,
   artistOf,
   parseSavedQueue,
   resumeSeconds,
@@ -70,6 +71,7 @@ export function queueEntries(items: Item[], tracks: ReadonlyMap<Id, Track>): Que
         uri: songUri(item.id, track.fileName),
         title: item.title,
         artist: artistOf(item),
+        album: albumOf(item),
         coverUri: item.coverUri,
         durationMs: track.durationMs,
       },
@@ -105,9 +107,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const entry = current >= 0 ? queue[current] : undefined;
 
   useEffect(() => {
-    // Music pauses other apps' audio and plays with the ringer off. Background
-    // playback comes with lock-screen controls (roadmap Phase 6).
-    setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'doNotMix', shouldPlayInBackground: false }).catch(
+    // Music pauses other apps' audio, plays with the ringer off and keeps
+    // playing with the screen off or in another app. doNotMix is also what
+    // lets the lock screen show this app's controls.
+    setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'doNotMix', shouldPlayInBackground: true }).catch(
       (error: unknown) => console.warn('Could not set the audio mode', error),
     );
   }, []);
@@ -270,6 +273,31 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     lastSave.current = now;
     void savePlaybackPosition(db, entry.itemId, status.currentTime * 1000).catch(() => {});
   }, [db, entry, status.isLoaded, status.playing, status.currentTime]);
+
+  // Lock-screen and notification controls for the queue, kept showing the current song.
+  // Android also needs them to keep playing in the background for more than a few minutes.
+  const lockScreenActive = useRef(false);
+  useEffect(() => {
+    try {
+      if (!entry) {
+        if (lockScreenActive.current) playlist.clearLockScreenControls();
+        lockScreenActive.current = false;
+        return;
+      }
+      const metadata = {
+        title: entry.title,
+        artist: entry.artist || undefined,
+        albumTitle: entry.album || undefined,
+        artworkUrl: entry.coverUri ?? undefined,
+      };
+      if (lockScreenActive.current) playlist.updateLockScreenMetadata(metadata);
+      else playlist.setActiveForLockScreen(true, metadata, { showNextTrack: true, showPreviousTrack: true });
+      lockScreenActive.current = true;
+    } catch (error) {
+      // Not available everywhere (Expo Go on some phones, the web): the player still works without it.
+      console.warn('Lock-screen controls are not available', error);
+    }
+  }, [playlist, entry]);
 
   const value = useMemo<PlayerContextValue>(
     () => ({

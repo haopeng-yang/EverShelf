@@ -10,6 +10,7 @@ export interface QueueEntry {
   uri: string;
   title: string;
   artist: string;
+  album: string;
   coverUri: string | null;
   durationMs: number | null;
 }
@@ -73,12 +74,20 @@ export function parseSavedQueue(json: string | undefined): SavedQueue | null {
 }
 
 /**
- * A song's artist, from its Artist tag. Tags are named in the language that
- * was set when the song was imported, so both languages' names are checked.
+ * A tag's value on a song. Tags are named in the language that was set when
+ * the song was imported, so both languages' names are checked.
  */
-export function artistOf(item: Item): string {
-  const names = new Set([translate('en', 'tag.artist'), translate('zh', 'tag.artist')]);
+function songTag(item: Item, key: 'tag.artist' | 'tag.album'): string {
+  const names = new Set([translate('en', key), translate('zh', key)]);
   return item.tags.find((tag) => names.has(tag.name) && tag.value.trim())?.value.trim() ?? '';
+}
+
+export function artistOf(item: Item): string {
+  return songTag(item, 'tag.artist');
+}
+
+export function albumOf(item: Item): string {
+  return songTag(item, 'tag.album');
 }
 
 /** "3:05", or "1:02:09" for an hour or more. */

@@ -2,6 +2,7 @@ import { addItem, addTag } from '../src/models/actions';
 import { createDefaultState } from '../src/models/defaults';
 import {
   LONG_TRACK_MS,
+  albumOf,
   artistOf,
   durationLabel,
   parseSavedQueue,
@@ -12,7 +13,15 @@ import {
 } from '../src/models/queue';
 import { shelfReducer } from '../src/models/shelfReducer';
 
-const entry = (itemId: string): QueueEntry => ({ itemId, uri: `file:///${itemId}`, title: itemId, artist: '', coverUri: null, durationMs: 1000 });
+const entry = (itemId: string): QueueEntry => ({
+  itemId,
+  uri: `file:///${itemId}`,
+  title: itemId,
+  artist: '',
+  album: '',
+  coverUri: null,
+  durationMs: 1000,
+});
 const ids = (queue: QueueEntry[]) => queue.map((e) => e.itemId);
 
 describe('queue', () => {
@@ -64,6 +73,7 @@ describe('queue', () => {
     expect(artistOf(state.items[0])).toBe('The Band');
     const chinese = { ...song, tags: [{ id: 't', name: '艺术家', value: '乐队' }] };
     expect(artistOf(chinese)).toBe('乐队');
+    expect(albumOf({ ...song, tags: [{ id: 'a', name: 'Album', value: ' Roads ' }] })).toBe('Roads');
   });
 
   it('formats lengths', () => {

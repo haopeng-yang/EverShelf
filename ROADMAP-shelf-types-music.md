@@ -120,7 +120,9 @@ Opening a shelf shows a layout that fits its type. `src/app/index.tsx` is alread
 
 ✅ **After Phase 5 music works in Expo Go** while the app is open.
 
-## Phase 6 – Background playback and lock screen (needs a dev build)
+## Phase 6 – Background playback and lock screen (needs a dev build) — code ✅, phone tests to do
+
+> **As built:** `enableBackgroundPlayback` is set in `app.json` (the plugin's microphone permissions stay off). `expo config --type introspect` shows the iOS `audio` background mode and Android's `mediaPlayback` foreground service. The player sets `shouldPlayInBackground` with `doNotMix`, turns on lock-screen controls with next and previous as soon as a queue is loaded, updates them on every song change (title, artist, album, cover) and clears them when the queue empties. Step 4, testing on real phones, is still to do.
 
 1. Add the `expo-audio` plugin to `app.json` with `enableBackgroundPlayback: true`. On iOS it adds the `audio` background mode, and on Android the media-playback foreground service. **Never edit `ios/` or `android/` by hand.**
 2. `setAudioModeAsync({ shouldPlayInBackground: true, interruptionMode: 'doNotMix' })`.
