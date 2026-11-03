@@ -54,7 +54,13 @@
         }
       ],
       "expo-asset",
-      "expo-video"
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": true,
+          "supportsPictureInPicture": true
+        }
+      ]
     ],
     "extra": {
       "router": {

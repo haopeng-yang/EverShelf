@@ -22,6 +22,8 @@ export interface Settings extends ReaderSettings {
   showContinueReading: boolean;
   /** Whether the next video on the shelf starts by itself when one ends. */
   autoplayNextVideo: boolean;
+  /** Whether a video's sound keeps playing when the app is left without picture-in-picture. */
+  videoBackgroundSound: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -31,6 +33,7 @@ const DEFAULT_SETTINGS: Settings = {
   language: 'system',
   showContinueReading: true,
   autoplayNextVideo: true,
+  videoBackgroundSound: false,
   ...DEFAULT_READER_SETTINGS,
 };
 
@@ -87,6 +90,7 @@ function parseSettings(stored: Record<string, string>): Settings {
     viewMode: viewModes.find((m) => m === stored.viewMode) ?? DEFAULT_SETTINGS.viewMode,
     showContinueReading: stored.showContinueReading !== 'false',
     autoplayNextVideo: stored.autoplayNextVideo !== 'false',
+    videoBackgroundSound: stored.videoBackgroundSound === 'true',
     ...parseReaderSettings(stored),
   };
 }

@@ -94,7 +94,9 @@ A fifth shelf type, **Video**, for films, episodes and clips the user already ha
 * **Mark watched / unwatched** from the selection bar and the details screen.
 * *(Optional)* External `.srt` files next to the video: parse to cues (a pure function with tests) and draw them over the player ourselves, since `expo-video` only shows embedded tracks.
 
-## Phase 6 – Background audio and picture-in-picture (needs a dev build)
+## Phase 6 – Background audio and picture-in-picture (needs a dev build) — code ✅, phone tests to do
+
+> **As built:** both plugin options are on in `app.json`; `expo config --type introspect` shows Android's `supportsPictureInPicture` activity flag, the `ExpoVideoPlaybackService` foreground service (`mediaPlayback`) and iOS's `audio` background mode. The video screen allows picture-in-picture and starts it automatically when leaving the app, and has a ⧉ button to start it by hand; both are only offered where `isPictureInPictureSupported()` says yes. The new setting **"Keep video sound playing in the background"** (off by default, hidden on web) turns on `staysActiveInBackground` and the now-playing notification, which shows the title and cover. Step 4, testing on real phones, is still to do.
 
 1. `expo-video` plugin options: `supportsBackgroundPlayback: true`, `supportsPictureInPicture: true`. **Never edit `ios/` or `android/` by hand.**
 2. `allowsPictureInPicture` and `startsPictureInPictureAutomatically` on the `VideoView`, so going home keeps the video in a small window.

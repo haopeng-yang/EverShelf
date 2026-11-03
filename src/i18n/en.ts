@@ -445,6 +445,9 @@ export const en = {
   'watch.playNow': 'Play now',
   'item.markWatched': 'Mark as watched',
   'item.markUnwatched': 'Mark as not watched',
+  'settings.videoBackgroundSound': 'Keep video sound playing in the background',
+  'settings.videoBackgroundSoundHint': 'If you leave the app without picture-in-picture, a video’s sound carries on, with controls in your notifications. Handy for talks and concerts.',
+  'watch.pip': 'Picture-in-picture',
   'backupError.badTag': 'This backup is damaged: a tag on item {n} is not readable.',
   'backupError.badBook': 'This backup is damaged: book {n} is not readable.',
 };

@@ -3,7 +3,14 @@ import { File } from 'expo-file-system';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
-import { useVideoPlayer, VideoView, type AudioTrack, type SubtitleTrack, type VideoPlayer } from 'expo-video';
+import {
+  isPictureInPictureSupported,
+  useVideoPlayer,
+  VideoView,
+  type AudioTrack,
+  type SubtitleTrack,
+  type VideoPlayer,
+} from 'expo-video';
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,6 +57,14 @@ const SAVE_EVERY = 5_000;
 const SKIP_SECONDS = 10;
 /** How long "Up next" waits before playing the next video, in seconds. */
 const UP_NEXT_SECONDS = 5;
+/** Picture-in-picture needs the config plugin's native setup, which only a build with it has (not web). */
+const PIP_SUPPORTED = (() => {
+  try {
+    return isPictureInPictureSupported();
+  } catch {
+    return false;
+  }
+})();
 
 type Loaded =
   | { itemId: Id; video: Video; uri: string; startAt: number; videoIds: Set<Id> }
@@ -141,6 +156,11 @@ function setSubtitles(player: VideoPlayer, track: SubtitleTrack | null) {
 function setAudio(player: VideoPlayer, track: AudioTrack) {
   player.audioTrack = track;
 }
+/** Keeps the sound going when the app is left (without picture-in-picture), with controls in the notifications. */
+function setBackgroundSound(player: VideoPlayer, on: boolean) {
+  player.staysActiveInBackground = on;
+  player.showNowPlayingNotification = on;
+}
 
 /** A track's name for the picker: its label, else its language, else its number. */
 function trackName(track: TrackLike, index: number, t: ReturnType<typeof useT>): string {
@@ -165,10 +185,15 @@ function Player({ item, video, uri, startAt, next }: PlayerProps) {
   const music = usePlayer();
   const { settings } = useSettings();
 
-  const player = useVideoPlayer({ uri, metadata: { title: item.title } }, (p) => {
-    p.timeUpdateEventInterval = 1;
-    p.play();
-  });
+  const player = useVideoPlayer(
+    { uri, metadata: { title: item.title, ...(item.coverUri ? { artwork: item.coverUri } : {}) } },
+    (p) => {
+      p.timeUpdateEventInterval = 1;
+      p.play();
+    },
+  );
+  useEffect(() => setBackgroundSound(player, settings.videoBackgroundSound), [player, settings.videoBackgroundSound]);
+  const view = useRef<VideoView>(null);
   const { status, error } = useEvent(player, 'statusChange', { status: player.status });
   const { subtitleTrack } = useEvent(player, 'subtitleTrackChange', { subtitleTrack: player.subtitleTrack });
   const { audioTrack } = useEvent(player, 'audioTrackChange', { audioTrack: player.audioTrack });
@@ -282,11 +307,15 @@ function Player({ item, video, uri, startAt, next }: PlayerProps) {
         ) : (
           <>
             <VideoView
+              ref={view}
               player={player}
               style={styles.video}
               nativeControls
               contentFit="contain"
               fullscreenOptions={{ enable: true, orientation: 'landscape' }}
+              // Going home while a video plays keeps it in a small window, as other players do.
+              allowsPictureInPicture={PIP_SUPPORTED}
+              startsPictureInPictureAutomatically={PIP_SUPPORTED}
             />
             {status === 'loading' && <ActivityIndicator color="#fff" style={styles.spinner} />}
           </>
@@ -337,6 +366,15 @@ function Player({ item, video, uri, startAt, next }: PlayerProps) {
               variant={subtitleTrack ? 'primary' : 'secondary'}
               accessibilityLabel={t('watch.subtitles')}
               onPress={() => setSheet('subtitles')}
+              style={styles.control}
+            />
+          )}
+          {PIP_SUPPORTED && (
+            <Button
+              title="⧉"
+              compact
+              accessibilityLabel={t('watch.pip')}
+              onPress={() => view.current?.startPictureInPicture().catch((e: unknown) => console.warn('Could not start PiP', e))}
               style={styles.control}
             />
           )}

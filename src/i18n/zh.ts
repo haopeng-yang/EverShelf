@@ -401,6 +401,9 @@ export const zh: Translations = {
   'watch.playNow': '立即播放',
   'item.markWatched': '标为已看完',
   'item.markUnwatched': '标为未看完',
+  'settings.videoBackgroundSound': '在后台继续播放视频声音',
+  'settings.videoBackgroundSoundHint': '不使用画中画离开应用时，视频的声音会继续播放，并在通知栏显示控制按钮。适合演讲和演唱会。',
+  'watch.pip': '画中画',
   'backupError.badTag': '此备份已损坏：第 {n} 个项目的某个标签无法读取。',
   'backupError.badBook': '此备份已损坏：第 {n} 本书无法读取。',
 };

@@ -127,6 +127,18 @@ export default function SettingsScreen() {
             onValueChange={(value) => setSetting('autoplayNextVideo', value)}
           />
         </View>
+        {Platform.OS !== 'web' && (
+          <View style={styles.switchRow}>
+            <View style={styles.switchText}>
+              <Text style={styles.switchLabel}>{t('settings.videoBackgroundSound')}</Text>
+              <Text style={styles.hint}>{t('settings.videoBackgroundSoundHint')}</Text>
+            </View>
+            <Switch
+              value={settings.videoBackgroundSound}
+              onValueChange={(value) => setSetting('videoBackgroundSound', value)}
+            />
+          </View>
+        )}
       </View>
 
       <View style={styles.section}>
