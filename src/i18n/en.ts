@@ -101,6 +101,8 @@ export const en = {
   'itemEdit.noTags': 'No tags yet.',
   'itemEdit.tagNamePlaceholder': 'Tag name, e.g. Age Restricted',
   'itemEdit.tagValuePlaceholder': 'Value, e.g. Recommended 15+',
+  'itemEdit.authorPlaceholder': 'Value, e.g. William Shakespeare',
+  'itemEdit.descriptionPlaceholder': 'Value, e.g. A masterpiece',
   'itemEdit.moveUp': 'Move {name} up',
   'itemEdit.moveDown': 'Move {name} down',
   'itemEdit.remove': 'Remove {name}',

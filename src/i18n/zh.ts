@@ -92,6 +92,8 @@ export const zh: Translations = {
   'itemEdit.noTags': '还没有标签。',
   'itemEdit.tagNamePlaceholder': '标签名，例如：年龄限制',
   'itemEdit.tagValuePlaceholder': '内容，例如：建议15岁以上',
+  'itemEdit.authorPlaceholder': '内容，例如：莎士比亚',
+  'itemEdit.descriptionPlaceholder': '内容，例如：一部杰作',
   'itemEdit.moveUp': '上移{name}',
   'itemEdit.moveDown': '下移{name}',
   'itemEdit.remove': '移除{name}',

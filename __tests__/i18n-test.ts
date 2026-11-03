@@ -1,7 +1,7 @@
-import { languageFromCode, translate } from '../src/i18n';
+import { languageFromCode, translate, translatorFor } from '../src/i18n';
 import { en, type TranslationKey } from '../src/i18n/en';
 import { zh } from '../src/i18n/zh';
-import { createDefaultState } from '../src/models/defaults';
+import { createDefaultState, defaultTagNamesFor, tagValuePlaceholder } from '../src/models/defaults';
 
 const placeholders = (text: string) => (text.match(/\{\w+\}/g) ?? []).sort();
 
@@ -40,5 +40,20 @@ describe('translations', () => {
     expect(chinese.shelves.map((s) => s.name)).toEqual(['书籍', '电影', '漫画', '动画', '音乐', '视频']);
     expect(chinese.shelves[0].defaultTagNames).toEqual(['作者', '日期', '简介']);
     expect(chinese.shelves.map((s) => s.id)).toEqual(english.shelves.map((s) => s.id));
+  });
+});
+
+describe('starting tags', () => {
+  it('starts new novel shelves with Author and Description', () => {
+    expect(defaultTagNamesFor('novel', translatorFor('en'))).toEqual(['Author', 'Description']);
+    expect(defaultTagNamesFor('collection', translatorFor('zh'))).toEqual(['日期', '简介']);
+  });
+
+  it('gives Author and Description their own examples, in either language', () => {
+    const en = translatorFor('en');
+    expect(tagValuePlaceholder('author ', en)).toBe('Value, e.g. William Shakespeare');
+    expect(tagValuePlaceholder('Description', en)).toBe('Value, e.g. A masterpiece');
+    expect(tagValuePlaceholder('Date', en)).toBe('Value, e.g. Recommended 15+');
+    expect(tagValuePlaceholder('作者', translatorFor('zh'))).toBe('内容，例如：莎士比亚');
   });
 });

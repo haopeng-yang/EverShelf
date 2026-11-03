@@ -12,6 +12,7 @@ import { NotFound } from '@/components/NotFound';
 import { TextField } from '@/components/TextField';
 import { useT } from '@/i18n/useT';
 import { newItemDraft } from '@/models/actions';
+import { tagValuePlaceholder } from '@/models/defaults';
 import { newId } from '@/models/ids';
 import { moveInArray } from '@/models/shelfReducer';
 import type { Id, Item, Tag } from '@/models/types';
@@ -193,7 +194,7 @@ export default function EditItemScreen() {
               <TextField
                 value={tag.value}
                 onChangeText={(value) => updateTag(tag.id, { value })}
-                placeholder={t('itemEdit.tagValuePlaceholder')}
+                placeholder={tagValuePlaceholder(tag.name, t)}
                 multiline
               />
             </View>

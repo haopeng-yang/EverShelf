@@ -11,6 +11,7 @@ import { NotFound } from '@/components/NotFound';
 import { TextField } from '@/components/TextField';
 import { useT } from '@/i18n/useT';
 import { addShelf } from '@/models/actions';
+import { defaultTagNamesFor } from '@/models/defaults';
 import { newId } from '@/models/ids';
 import { SHELF_KINDS, canChangeKind } from '@/models/shelfKinds';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
@@ -53,7 +54,7 @@ export default function EditShelfScreen() {
     };
   }, [db, id]);
   const [tagNames, setTagNames] = useState<TagNameRow[]>(() =>
-    (shelf?.defaultTagNames ?? [t('tag.date'), t('tag.description')]).map((n) => ({ key: newId(), name: n })),
+    (shelf?.defaultTagNames ?? defaultTagNamesFor(kind, t)).map((n) => ({ key: newId(), name: n })),
   );
   const [lockEnabled, setLockEnabled] = useState(!!shelf?.lock);
   const [password, setPassword] = useState('');
@@ -61,6 +62,13 @@ export default function EditShelfScreen() {
   const [saving, setSaving] = useState(false);
   const { isLocked, unlock } = useShelfLocks();
   const styles = useStyles();
+
+  /** On a new shelf, picking a type swaps in that type's starting tags, unless they've been changed. */
+  const changeKind = (next: ShelfKind) => {
+    const untouched = tagNames.map((row) => row.name).join('\n') === defaultTagNamesFor(kind, t).join('\n');
+    if (!shelf && untouched) setTagNames(defaultTagNamesFor(next, t).map((n) => ({ key: newId(), name: n })));
+    setKind(next);
+  };
 
   if (id && !shelf) return <NotFound what="shelf" />;
   // Anyone could remove the lock here, so this screen needs the password too.
@@ -168,7 +176,7 @@ export default function EditShelfScreen() {
             variant={kind === k ? 'primary' : 'secondary'}
             compact
             disabled={!kindAllowed(k)}
-            onPress={() => setKind(k)}
+            onPress={() => changeKind(k)}
           />
         ))}
         {SHELF_KINDS.some((k) => !kindAllowed(k)) && fileKinds !== null && (
