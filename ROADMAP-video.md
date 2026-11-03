@@ -55,6 +55,8 @@ A fifth shelf type, **Video**, for films, episodes and clips the user already ha
 
 ## Phase 2 – Import ✅
 
+> **As built:** `.mp4` is the one ambiguous extension: `detectFormat` returns `'mp4'` and `pickBookFile` reads the `moov` box to decide song or video, so a video picked on a music shelf now gets the usual "import it into Videos instead" message. Matroska's length usually *is* in its header (Segment Info), so it's read at import; the player fills it in only when it's missing. Picture size comes from the video track's `tkhd`, turned when its matrix says the phone was held upright. Songs and videos picked together go to whichever the shelf holds, and the others are skipped and listed. Song and video files share `storeMediaFile` / `mediaUri` in `bookFiles.ts`.
+
 1. `detectFormat` learns video extensions and MIME types; `sniffVideo` knows MP4/MOV boxes and Matroska's EBML header. For any MP4-style file the `moov` box decides: video track → video, sound only → song.
 2. `readVideo` (pure, with tests): container format, length, width and height (from `tkhd`), and MP4 tags (title, year, description, cover art). Matroska's length comes from the player on first play.
 3. `importVideos.ts`, like `importSongs.ts`: several files at once (a season), files that aren't videos are skipped and listed, a free-space check, progress ("Copying 2 of 8"), and clean-up on failure.
@@ -62,21 +64,25 @@ A fifth shelf type, **Video**, for films, episodes and clips the user already ha
 5. A thumbnail becomes the cover (decision 5). If it fails, the video still imports with a plain cover.
 6. The import screen lists the videos (title, length, resolution) and lets the user fix titles before saving.
 
-## Phase 3 – Video shelf layout
+## Phase 3 – Video shelf layout ✅
+
+> **As built:** `VideoShelf` + `VideoCard` / `VideoThumb` under `src/components/`. The progress rules (`resumePosition`, `watchedFraction`, `continueWatching`) are pure functions in `src/models/videos.ts` with tests. "Continue watching" follows the existing "Continue reading" setting, whose label now names both.
 
 * `VideoShelf`: wide 16:9 cards (thumbnail, title, length, a progress bar along the bottom, a ✓ when watched), or rows in list view.
 * **"Continue watching"** at the top: started, not finished, most recent first.
 * Tapping a video plays it. Long-press selects; with one video selected the bar has **Details**. Entries without a file open their details.
 * The details screen gets a **Play / Resume** button and shows length and resolution.
 
-## Phase 4 – Player
+## Phase 4 – Player ✅
+
+> **As built:** the saved place is applied once the player reports `readyToPlay` (seeking earlier isn't reliable on iOS). The latest position is kept in a ref and saved every 5 s, on pause and when leaving, since the player is released before the screen's own cleanup. Watching part of a watched video again makes it unwatched. Still to check on phones: fullscreen rotating to landscape while `app.json` keeps the app itself portrait (expected to work on Android; iOS may need `orientation: "default"`), and decoding of HEVC/AV1 files on older phones.
 
 * `src/app/watch/[itemId].tsx`: black screen, `VideoView` with native controls, fullscreen (rotates to landscape), title in the header.
 * **Resume**: start where the user stopped (unless within 10 s of the start or the end). Save the position every 5 s and when leaving. At the end: mark watched, count a play, and next time start from the beginning.
 * The music player pauses when a video starts; the mini player hides on the video screen.
 * A file the phone can't decode shows *"This phone can't play this video"* instead of a black screen.
 
-**After Phase 4, video works in Expo Go** while the app is open.
+✅ **After Phase 4, video works in Expo Go** while the app is open.
 
 ## Phase 5 – Watching comfort
 

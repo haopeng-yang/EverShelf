@@ -12,6 +12,7 @@ import { CollectionShelf } from '@/components/shelf/CollectionShelf';
 import type { ShelfLayoutProps } from '@/components/shelf/ItemGrid';
 import { MusicShelf } from '@/components/shelf/MusicShelf';
 import { ReadingShelf } from '@/components/shelf/ReadingShelf';
+import { VideoShelf } from '@/components/shelf/VideoShelf';
 import { TextField } from '@/components/TextField';
 import { confirm, showMessage } from '@/components/dialogs';
 import { useT } from '@/i18n/useT';
@@ -32,7 +33,7 @@ const LAYOUTS: Record<ShelfKind, (props: ShelfLayoutProps) => ReactElement> = {
   novel: ReadingShelf,
   comic: ReadingShelf,
   music: MusicShelf,
-  video: CollectionShelf,
+  video: VideoShelf,
 };
 
 export default function ShelvesScreen() {
@@ -135,7 +136,7 @@ export default function ShelvesScreen() {
       return ids.size === 0 ? null : { ...current, ids };
     });
 
-  // On a reading or music shelf, tapping a book opens the reader and a song plays, so their details are reached from here.
+  // On a reading, music or video shelf, tapping a book opens the reader and a song or video plays, so their details are reached from here.
   const detailsItem =
     shelf && shelf.kind !== 'collection' && selectedItems.length === 1 && fileKinds.has(selectedItems[0].id)
       ? selectedItems[0]

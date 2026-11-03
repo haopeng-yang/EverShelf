@@ -20,7 +20,7 @@ export function MiniPlayer() {
   const pathname = usePathname();
   const { queue, current, status, togglePlay, next, stop } = usePlayer();
   const entry = queue[current];
-  if (!entry || pathname === '/play' || pathname.startsWith('/read')) return null;
+  if (!entry || pathname === '/play' || pathname.startsWith('/read') || pathname.startsWith('/watch')) return null;
   const progress = status.duration > 0 ? Math.min(1, status.currentTime / status.duration) : 0;
 
   return (

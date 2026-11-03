@@ -4,14 +4,18 @@ import { useCallback, useState } from 'react';
 import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { percentLabel } from '@/books/progress';
+import { resolutionLabel } from '@/books/video/readVideo';
 import { Button } from '@/components/Button';
 import { Cover } from '@/components/Cover';
 import { LockedScreen } from '@/components/LockedShelf';
 import { NotFound } from '@/components/NotFound';
 import { useT } from '@/i18n/useT';
+import { durationLabel } from '@/models/queue';
+import type { VideoSummary } from '@/models/types';
+import { resumePosition } from '@/models/videos';
 import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfState } from '@/state/ShelfProvider';
-import { loadChapters, loadProgress } from '@/storage/database';
+import { loadChapters, loadProgress, loadVideoSummaries } from '@/storage/database';
 import { fontSize, makeStyles, spacing } from '@/theme';
 
 /** Wider than this, the cover sits beside the details (as in the sketch); narrower, above them. */
@@ -30,13 +34,15 @@ export default function ItemScreen() {
     /** "42% read" or "Finished"; null if never opened. */
     status: string | null;
   }>({ chapterCount: 0, continueAt: null, status: null });
-  // Reload whenever the screen comes back into view, e.g. after reading.
+  const [video, setVideo] = useState<VideoSummary | null>(null);
+  // Reload whenever the screen comes back into view, e.g. after reading or watching.
   useFocusEffect(
     useCallback(() => {
       let current = true;
-      Promise.all([loadChapters(db, id), loadProgress(db, id)])
-        .then(([chapters, progress]) => {
+      Promise.all([loadChapters(db, id), loadProgress(db, id), loadVideoSummaries(db)])
+        .then(([chapters, progress, videos]) => {
           if (!current) return;
+          setVideo(videos.get(id) ?? null);
           const at = progress && chapters.find((c) => c.id === progress.chapterId);
           const status = !progress
             ? null
@@ -59,6 +65,14 @@ export default function ItemScreen() {
 
   const shelf = state.shelves.find((s) => s.id === item.shelfId);
   const sideBySide = width >= SIDE_BY_SIDE_MIN_WIDTH;
+  const resumeAt = video ? resumePosition(video.positionMs, video.durationMs) : 0;
+  const videoDetails = video
+    ? [
+        video.durationMs !== null ? durationLabel(video.durationMs) : '',
+        resolutionLabel(video.width, video.height),
+        video.finished ? t('video.watched') : '',
+      ].filter(Boolean)
+    : [];
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -80,10 +94,25 @@ export default function ItemScreen() {
               {[t('item.chapters', { count: book.chapterCount }), book.status].filter(Boolean).join(' · ')}
             </Text>
           )}
+          {videoDetails.length > 0 && <Text style={styles.chapters}>{videoDetails.join(' · ')}</Text>}
         </View>
       </View>
 
       <View style={styles.footer}>
+        {video && (
+          <View style={styles.readButton}>
+            <Button
+              title={resumeAt > 0 ? t('item.resume') : t('item.play')}
+              variant="primary"
+              onPress={() => router.push({ pathname: '/watch/[itemId]', params: { itemId: item.id } })}
+            />
+            {resumeAt > 0 && (
+              <Text style={styles.chapters} numberOfLines={1}>
+                {t('item.resumeAt', { time: durationLabel(resumeAt) })}
+              </Text>
+            )}
+          </View>
+        )}
         {book.chapterCount > 0 && (
           <View style={styles.readButton}>
             <Button
