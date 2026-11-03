@@ -274,6 +274,9 @@ export const SELECT_BOOKMARKS =
 export const INSERT_BOOKMARK =
   'INSERT INTO bookmarks (id, item_id, chapter_id, paragraph, excerpt, created_at) VALUES (?, ?, ?, ?, ?, ?)';
 export const DELETE_BOOKMARK = 'DELETE FROM bookmarks WHERE id = ?';
+export const UPDATE_BOOKMARK = 'UPDATE bookmarks SET paragraph = ?, excerpt = ? WHERE id = ?';
+export const SET_CHAPTER_CHAR_COUNT = 'UPDATE chapters SET char_count = ? WHERE id = ?';
+export const RENAME_CHAPTER = 'UPDATE chapters SET title = ? WHERE id = ?';
 export const SET_FINISHED = 'UPDATE reading_progress SET finished_at = ? WHERE item_id = ?';
 
 export const SELECT_CHAPTERS =

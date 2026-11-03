@@ -1,6 +1,8 @@
 import type { Chapter, Id } from '../models/types';
 import { readChapterText } from '../storage/bookFiles';
 
+import { splitParagraphs } from './editText';
+
 /** Characters of context shown on each side of a match. */
 const CONTEXT = 30;
 
@@ -58,7 +60,7 @@ export async function searchBook(
     if (isCancelled()) return false;
     const text = await readChapterText(itemId, chapter.fileName);
     if (!text || isCancelled()) continue;
-    const results = findInParagraphs(text.split('\n').filter(Boolean), query, index, limit - found);
+    const results = findInParagraphs(splitParagraphs(text), query, index, limit - found);
     if (results.length > 0) {
       found += results.length;
       onResults(results);

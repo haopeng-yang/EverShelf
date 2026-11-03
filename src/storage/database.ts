@@ -51,6 +51,7 @@ import {
   CREATE_TABLES_V2,
   CREATE_TABLES_V3,
   DELETE_BOOKMARK,
+  RENAME_CHAPTER,
   MIGRATE_V4,
   MIGRATE_V5,
   MIGRATE_V6,
@@ -92,6 +93,7 @@ import {
   UPSERT_SETTING,
 } from './schema';
 import {
+  chapterEditStatements,
   finishedStatements,
   insertBookmarkStatement,
   insertTrackStatement,
@@ -355,6 +357,21 @@ export async function addBookmark(db: SQLiteDatabase, bookmark: Bookmark): Promi
 
 export async function removeBookmark(db: SQLiteDatabase, bookmarkId: Id): Promise<void> {
   await db.runAsync(DELETE_BOOKMARK, [bookmarkId]);
+}
+
+/** Saves an edited chapter's character count and bookmarks; see chapterEditStatements. */
+export async function saveChapterEdit(
+  db: SQLiteDatabase,
+  chapterId: Id,
+  charCount: number,
+  moved: Bookmark[],
+  removed: Bookmark[],
+): Promise<void> {
+  await runStatements(db, chapterEditStatements(chapterId, charCount, moved, removed));
+}
+
+export async function renameChapter(db: SQLiteDatabase, chapterId: Id, title: string): Promise<void> {
+  await db.runAsync(RENAME_CHAPTER, [title, chapterId]);
 }
 
 /** Runs statements together so a change is saved completely or not at all. */

@@ -17,12 +17,15 @@ import type {
 } from '../models/types';
 import { chapterToRow, itemToRow, pageToRow, parseBookKind, shelfToRow, tagToRow, type ShelfBookKindRow } from './rows';
 import {
+  DELETE_BOOKMARK,
   INSERT_BOOKMARK,
   INSERT_PAGE,
   INSERT_TRACK,
   INSERT_VIDEO,
+  SET_CHAPTER_CHAR_COUNT,
   SET_FINISHED,
   SET_SHELF_KIND,
+  UPDATE_BOOKMARK,
   UPSERT_BOOK_INFO,
   UPSERT_PROGRESS,
 } from './schema';
@@ -177,6 +180,23 @@ export function insertBookmarkStatement(bookmark: Bookmark): Statement {
     sql: INSERT_BOOKMARK,
     params: [bookmark.id, bookmark.itemId, bookmark.chapterId, bookmark.paragraph, bookmark.excerpt, bookmark.createdAt],
   };
+}
+
+/**
+ * Saves an edit to a chapter's text (the file is written separately): its new
+ * character count, and the bookmarks the edit moved or deleted.
+ */
+export function chapterEditStatements(
+  chapterId: Id,
+  charCount: number,
+  moved: Bookmark[],
+  removed: Bookmark[],
+): Statement[] {
+  return [
+    { sql: SET_CHAPTER_CHAR_COUNT, params: [charCount, chapterId] },
+    ...moved.map((b) => ({ sql: UPDATE_BOOKMARK, params: [b.paragraph, b.excerpt, b.id] })),
+    ...removed.map((b) => ({ sql: DELETE_BOOKMARK, params: [b.id] })),
+  ];
 }
 
 export function insertVideoStatement(video: Video): Statement {

@@ -6,14 +6,17 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Platform, Text, View, type ListViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BOOKMARK_EXCERPT, editParagraph, splitParagraphs } from '@/books/editText';
 import { bookPercent } from '@/books/progress';
 import { BookSearchSheet } from '@/components/BookSearchSheet';
 import { Button } from '@/components/Button';
 import { ChapterListSheet } from '@/components/ChapterListSheet';
 import { ComicReader } from '@/components/comic/ComicReader';
+import { showMessage } from '@/components/dialogs';
 import { LockedScreen } from '@/components/LockedShelf';
 import { NotFound } from '@/components/NotFound';
 import { ReaderSettingsSheet } from '@/components/ReaderSettingsSheet';
+import { TextEditSheet } from '@/components/TextEditSheet';
 import { useT } from '@/i18n/useT';
 import { readerStyle } from '@/models/readerSettings';
 import { newId } from '@/models/ids';
@@ -21,7 +24,7 @@ import type { Bookmark, BookKind, Chapter } from '@/models/types';
 import { useSettings } from '@/state/SettingsProvider';
 import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfState } from '@/state/ShelfProvider';
-import { readChapterText } from '@/storage/bookFiles';
+import { readChapterText, writeChapterText } from '@/storage/bookFiles';
 import {
   addBookmark,
   loadBookInfo,
@@ -29,6 +32,8 @@ import {
   loadChapters,
   loadProgress,
   removeBookmark,
+  renameChapter,
+  saveChapterEdit,
   saveProgress,
   setBookFinished,
 } from '@/storage/database';
@@ -36,8 +41,6 @@ import { fontSize, makeStyles, spacing, useTheme } from '@/theme';
 
 const KEEP_AWAKE_TAG = 'reader';
 const TOAST_MS = 1500;
-/** Characters of a paragraph kept with its bookmark, for the bookmark list. */
-const BOOKMARK_EXCERPT = 80;
 
 /** Wait this long after scrolling stops before saving the reading position. */
 const SAVE_DELAY_MS = 1000;
@@ -45,6 +48,8 @@ const VIEWABILITY = { itemVisiblePercentThreshold: 1 };
 
 type ChapterText = { status: 'loading' } | { status: 'missing' } | { status: 'ready'; paragraphs: string[] };
 type LoadedText = { chapterId: string } & ({ status: 'missing' } | { status: 'ready'; paragraphs: string[] });
+/** The part of the chapter being fixed in edit mode. */
+type EditTarget = { kind: 'paragraph'; index: number; text: string } | { kind: 'title'; text: string };
 
 /** Opens the right reader for the book: the text reader for novels, the comic reader for comics. */
 export default function ReaderScreen() {
@@ -78,7 +83,8 @@ function Loading() {
 
 /**
  * Reads a book one chapter at a time. Tap the text to show or hide the
- * controls. The position is saved as you scroll and restored next time.
+ * controls. The position is saved as you scroll and restored next time. In
+ * edit mode, tapping a paragraph or the chapter title opens it for fixing.
  */
 function TextReader() {
   const { itemId } = useLocalSearchParams<{ itemId: string }>();
@@ -99,6 +105,9 @@ function TextReader() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [finished, setFinished] = useState(false);
+  /** Edit mode: taps open the text for fixing instead of showing the controls. */
+  const [editing, setEditing] = useState(false);
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   /** A short message shown over the text, e.g. "Bookmark added". */
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -167,23 +176,24 @@ function TextReader() {
   }, [db, itemId]);
 
   // Load the current chapter's text, and remember it as the place to come back to.
+  // Keyed by id and file, so an edit to the chapter's title or count doesn't reload it.
+  const chapterId = chapter?.id;
+  const chapterFile = chapter?.fileName;
   useEffect(() => {
-    if (!chapter) return;
+    if (!chapterId || !chapterFile) return;
     let current = true;
-    position.current = { chapterId: chapter.id, paragraph: restoreTo.current };
+    position.current = { chapterId, paragraph: restoreTo.current };
     savePositionRef.current();
-    readChapterText(itemId, chapter.fileName).then((raw) => {
+    readChapterText(itemId, chapterFile).then((raw) => {
       if (!current) return;
       setLoaded(
-        raw === null
-          ? { chapterId: chapter.id, status: 'missing' }
-          : { chapterId: chapter.id, status: 'ready', paragraphs: raw.split('\n').filter(Boolean) },
+        raw === null ? { chapterId, status: 'missing' } : { chapterId, status: 'ready', paragraphs: splitParagraphs(raw) },
       );
     });
     return () => {
       current = false;
     };
-  }, [chapter, itemId]);
+  }, [chapterId, chapterFile, itemId]);
 
   // Jump to the saved paragraph once the text is on screen.
   useEffect(() => {
@@ -237,6 +247,48 @@ function TextReader() {
     setIndex(next);
   };
   const toggleControls = () => setControlsVisible((v) => !v);
+
+  /** Saves a fixed paragraph: the chapter file first, then its count and any bookmarks it moved. */
+  const saveParagraph = async (paragraph: number, edited: string) => {
+    if (!chapter || text.status !== 'ready') return;
+    const here = bookmarks.filter((b) => b.chapterId === chapter.id);
+    const edit = editParagraph(text.paragraphs, paragraph, edited, here);
+    try {
+      await writeChapterText(itemId, chapter.fileName, edit.text);
+      await saveChapterEdit(db, chapter.id, edit.text.length, edit.moved, edit.removed);
+    } catch (error) {
+      console.warn('Could not save edit', error);
+      showMessage(t('editText.saveFailed'));
+      return;
+    }
+    setLoaded({ chapterId: chapter.id, status: 'ready', paragraphs: edit.paragraphs });
+    setChapters((list) => list && list.map((c) => (c.id === chapter.id ? { ...c, charCount: edit.text.length } : c)));
+    const moved = new Map(edit.moved.map((b) => [b.id, b]));
+    const removed = new Set(edit.removed.map((b) => b.id));
+    setBookmarks((list) => list.filter((b) => !removed.has(b.id)).map((b) => moved.get(b.id) ?? b));
+    setEditTarget(null);
+    showToast(t('editText.saved'));
+  };
+
+  const saveTitle = async (edited: string) => {
+    const title = edited.trim();
+    if (!chapter || !title) return;
+    try {
+      await renameChapter(db, chapter.id, title);
+    } catch (error) {
+      console.warn('Could not rename chapter', error);
+      showMessage(t('editText.saveFailed'));
+      return;
+    }
+    setChapters((list) => list && list.map((c) => (c.id === chapter.id ? { ...c, title } : c)));
+    setEditTarget(null);
+    showToast(t('editText.saved'));
+  };
+
+  const startEditing = () => {
+    setControlsVisible(false);
+    setEditing(true);
+  };
 
   const showToast = (message: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -318,7 +370,7 @@ function TextReader() {
           ListHeaderComponent={
             <Text
               style={[styles.chapterTitle, { color: palette.text, fontFamily: look.fontFamily }]}
-              onPress={toggleControls}>
+              onPress={editing ? () => setEditTarget({ kind: 'title', text: chapter.title }) : toggleControls}>
               {chapter.title}
             </Text>
           }
@@ -334,8 +386,10 @@ function TextReader() {
                 textStyle,
                 bookmarkedHere.has(paragraphIndex) && [styles.bookmarked, { borderColor: palette.textMuted }],
               ]}
-              onPress={toggleControls}
-              onLongPress={() => toggleBookmark(paragraphIndex, paragraph)}>
+              onPress={
+                editing ? () => setEditTarget({ kind: 'paragraph', index: paragraphIndex, text: paragraph }) : toggleControls
+              }
+              onLongPress={editing ? undefined : () => toggleBookmark(paragraphIndex, paragraph)}>
               {paragraph}
             </Text>
           )}
@@ -378,6 +432,13 @@ function TextReader() {
               compact
               accessibilityLabel={t('search.title')}
               onPress={() => setSearchOpen(true)}
+            />
+            <Button
+              title="✎"
+              variant="text"
+              compact
+              accessibilityLabel={t('editText.start')}
+              onPress={startEditing}
             />
             <Button
               title="Aa"
@@ -434,6 +495,24 @@ function TextReader() {
       )}
       <ReaderSettingsSheet visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
+      {editing && (
+        <View style={[styles.bar, styles.topBar, barStyle, { paddingTop: insets.top + spacing.sm }]}>
+          <Text style={[styles.editHint, { color: palette.text }]}>{t('editText.modeHint')}</Text>
+          <Button title={t('editText.done')} variant="primary" compact onPress={() => setEditing(false)} />
+        </View>
+      )}
+      <TextEditSheet
+        title={editTarget?.kind === 'title' ? t('editText.chapterTitle') : t('editText.paragraph')}
+        initial={editTarget?.text ?? null}
+        singleLine={editTarget?.kind === 'title'}
+        hint={editTarget?.kind === 'paragraph' ? t('editText.paragraphHint') : undefined}
+        onSave={(edited) => {
+          if (editTarget?.kind === 'paragraph') saveParagraph(editTarget.index, edited);
+          else saveTitle(edited);
+        }}
+        onClose={() => setEditTarget(null)}
+      />
+
       {toast && (
         <View pointerEvents="none" style={[styles.toast, { bottom: insets.bottom + spacing.xl * 3 }]}>
           <Text style={styles.toastText}>{toast}</Text>
@@ -487,6 +566,7 @@ const useStyles = makeStyles(() => ({
   titles: { flex: 1 },
   bookTitle: { fontSize: fontSize.body, fontWeight: '600' },
   barHint: { fontSize: fontSize.small },
+  editHint: { flex: 1, fontSize: fontSize.small },
 }));
 
 const useLoadingStyles = makeStyles((c) => ({

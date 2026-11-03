@@ -54,6 +54,7 @@ import {
   SELECT_BOOK_INFO,
   SELECT_BOOK_ITEM_IDS,
   SELECT_BOOK_SUMMARIES,
+  RENAME_CHAPTER,
   SELECT_BOOKMARKS,
   SELECT_CHAPTERS,
   SELECT_FILE_KINDS,
@@ -70,6 +71,7 @@ import {
   shelfLockRepair,
 } from '../src/storage/schema';
 import {
+  chapterEditStatements,
   finishedStatements,
   insertBookmarkStatement,
   insertTrackStatement,
@@ -359,6 +361,27 @@ describe('Book storage', () => {
 
     run(db, replaceChapters(itemId, chapters(itemId, ['New'])));
     expect(bookmarks()).toEqual([]);
+  });
+
+  it('saves a text edit: the chapter count, moved bookmarks and deleted ones', () => {
+    const { db, itemId } = withBook();
+    run(db, replaceChapters(itemId, chapters(itemId, ['One'])));
+    const chapterId = `${itemId}-ch0`;
+    const kept = { id: 'bm1', itemId, chapterId, paragraph: 2, excerpt: 'Old.', createdAt: 1 };
+    const gone = { id: 'bm2', itemId, chapterId, paragraph: 5, excerpt: 'Typo.', createdAt: 2 };
+    run(db, [insertBookmarkStatement(kept), insertBookmarkStatement(gone)]);
+
+    run(db, chapterEditStatements(chapterId, 777, [{ ...kept, paragraph: 3, excerpt: 'New.' }], [gone]));
+    expect(loadChapters(db, itemId)[0].charCount).toBe(777);
+    expect(
+      db
+        .prepare(SELECT_BOOKMARKS)
+        .all(itemId)
+        .map((r) => rowToBookmark({ ...r } as unknown as BookmarkRow)),
+    ).toEqual([{ ...kept, paragraph: 3, excerpt: 'New.' }]);
+
+    run(db, [{ sql: RENAME_CHAPTER, params: ['Chapter One', chapterId] }]);
+    expect(loadChapters(db, itemId)[0].title).toBe('Chapter One');
   });
 
   it('restores a book from a backup: chapters, progress, finished and bookmarks', () => {
