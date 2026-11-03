@@ -14,6 +14,9 @@ import { decodeText, type TextEncodingName } from './decodeText';
 import { detectFormat, hasExtension } from './detectFormat';
 import { openComic, zipEntryNames, type PickedComic } from './importComic';
 import { openSongs, type PickedSongs } from './importSongs';
+import { openVideos, type PickedVideos } from './importVideos';
+import { readMp4 } from './music/mp4';
+import { withSource } from './pickedFiles';
 import { parseEpub, type ParsedEpub } from './parseEpub';
 import type { ParsedChapter } from './parseTxt';
 
@@ -25,11 +28,13 @@ export type PickedBookFile =
   /** One or more .cbz/.zip files; name lists the picked file names. */
   | { kind: 'comic'; name: string; comic: PickedComic }
   /** One or more songs, imported as one item each. */
-  | { kind: 'songs'; name: string; songs: PickedSongs };
+  | { kind: 'songs'; name: string; songs: PickedSongs }
+  /** One or more videos, imported as one item each. */
+  | { kind: 'videos'; name: string; videos: PickedVideos };
 
 export class UnsupportedFileError extends Error {}
 
-/** Several files were picked, but they aren't all comics or all songs (only those import as a set). */
+/** Several files were picked, but they aren't all comics, or all songs and videos (only those import as a set). */
 export class MixedFilesError extends Error {}
 
 /** The picked file doesn't fit on the shelf, e.g. a novel picked for a comic shelf. */
@@ -46,8 +51,8 @@ export class WrongShelfError extends Error {
 
 /**
  * Opens the system file picker for a .txt, .epub or comic (.cbz/.zip) file,
- * several comic files that make up one series, or one or more songs. Null if
- * the user cancels.
+ * several comic files that make up one series, or one or more songs or
+ * videos. Null if the user cancels.
  * Throws WrongShelfError, before reading the whole file, if what was picked
  * doesn't fit on a `shelfKind` shelf.
  */
@@ -68,15 +73,18 @@ export async function pickBookFile(shelfKind: ShelfKind): Promise<PickedBookFile
   if (picked.result.length > 1) {
     const formats = new Set<string | null>();
     for (const file of picked.result) formats.add(await formatOf(file));
-    const [format] = formats;
-    if (formats.size > 1 || (format !== 'comic' && format !== 'audio')) throw new MixedFilesError();
-    const fileKind = format === 'comic' ? 'comic' : 'music';
+    const media = [...formats].every((f) => f === 'audio' || f === 'video');
+    // Songs and videos picked together go to whichever the shelf holds; the others are skipped and listed.
+    const format = media && formats.size > 1 ? (shelfKind === 'video' ? 'video' : 'audio') : [...formats][0];
+    if ((formats.size > 1 && !media) || (format !== 'comic' && format !== 'audio' && format !== 'video')) {
+      throw new MixedFilesError();
+    }
+    const fileKind = format === 'comic' ? 'comic' : format === 'video' ? 'video' : 'music';
     if (!canHold(shelfKind, fileKind)) throw new WrongShelfError(fileKind, '', picked.result.length);
     const name = names.filter(Boolean).join(', ');
-    if (format === 'audio') {
-      const songs = await openSongs(picked.result.map((file, i) => ({ file, name: names[i] })), pickedAreCopies);
-      return { kind: 'songs', name, songs };
-    }
+    const files = picked.result.map((file, i) => ({ file, name: names[i] }));
+    if (format === 'audio') return { kind: 'songs', name, songs: await openSongs(files, pickedAreCopies) };
+    if (format === 'video') return { kind: 'videos', name, videos: await openVideos(files, pickedAreCopies) };
     return { kind: 'comic', name, comic: await openComic(picked.result, pickedAreCopies) };
   }
 
@@ -84,9 +92,10 @@ export async function pickBookFile(shelfKind: ShelfKind): Promise<PickedBookFile
   const [name] = names;
   const format = await formatOf(file);
   if (!format) throw new UnsupportedFileError(name);
-  const fileKind = format === 'comic' ? 'comic' : format === 'audio' ? 'music' : 'novel';
+  const fileKind = format === 'comic' ? 'comic' : format === 'audio' ? 'music' : format === 'video' ? 'video' : 'novel';
   if (!canHold(shelfKind, fileKind)) throw new WrongShelfError(fileKind, name, 1);
   if (format === 'audio') return { kind: 'songs', name, songs: await openSongs([{ file, name }], pickedAreCopies) };
+  if (format === 'video') return { kind: 'videos', name, videos: await openVideos([{ file, name }], pickedAreCopies) };
   if (format === 'comic') return { kind: 'comic', name, comic: await openComic([file], pickedAreCopies) };
   const bytes = await readBytes(file);
   if (pickedAreCopies) deleteQuietly(file);
@@ -97,12 +106,22 @@ export async function pickBookFile(shelfKind: ShelfKind): Promise<PickedBookFile
 
 /**
  * Works out what a picked file is from its name, type and first bytes, without
- * reading it all (comics can be huge). A ZIP is an EPUB if it has an EPUB's
- * container file, and a comic otherwise.
+ * reading it all (comics and videos can be huge). A ZIP is an EPUB if it has
+ * an EPUB's container file, and a comic otherwise. An MP4 is a video if it has
+ * a video track, and a song otherwise.
  */
-async function formatOf(file: File): Promise<'txt' | 'epub' | 'comic' | 'audio' | null> {
+async function formatOf(file: File): Promise<'txt' | 'epub' | 'comic' | 'audio' | 'video' | null> {
   const head = await readHead(file);
   const format = detectFormat(head, file.name, file.type);
+  if (format === 'mp4') {
+    try {
+      const info = await withSource(file, readMp4);
+      return info.hasVideo ? 'video' : info.hasAudio ? 'audio' : null;
+    } catch {
+      // Can't be opened to look inside (some Android providers): go by what the system calls it.
+      return file.type.startsWith('video/') ? 'video' : 'audio';
+    }
+  }
   if (format !== 'zip') return format;
   try {
     const names = await zipEntryNames(file);

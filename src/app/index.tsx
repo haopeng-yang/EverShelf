@@ -314,7 +314,7 @@ export default function ShelvesScreen() {
           ) : (
             <View style={[styles.fabRow, { bottom: insets.bottom + spacing.lg }]}>
               {/* Book files are stored on the device, which the web version can't do. Collections have nothing to import. */}
-              {Platform.OS !== 'web' && shelf.kind !== 'collection' && shelf.kind !== 'video' && (
+              {Platform.OS !== 'web' && shelf.kind !== 'collection' && (
                 <Button
                   title={t(`home.import.${shelf.kind}`)}
                   accessibilityLabel={t(`home.importTo.${shelf.kind}`, { shelf: shelf.name })}

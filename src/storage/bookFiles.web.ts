@@ -27,11 +27,15 @@ export function songFileName(extension: string): string {
   return `song.${extension.toLowerCase()}`;
 }
 
-export async function storeSongFile(_itemId: Id, _fileName: string, _from: unknown, _temporary: boolean): Promise<void> {
-  throw new Error('Songs are not supported on web yet');
+export function videoFileName(extension: string): string {
+  return `video.${extension.toLowerCase()}`;
 }
 
-export function songUri(_itemId: Id, _fileName: string): string {
+export async function storeMediaFile(_itemId: Id, _fileName: string, _from: unknown, _temporary: boolean): Promise<void> {
+  throw new Error('Songs and videos are not supported on web yet');
+}
+
+export function mediaUri(_itemId: Id, _fileName: string): string {
   return '';
 }
 

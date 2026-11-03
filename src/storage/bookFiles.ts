@@ -61,28 +61,34 @@ export function songFileName(extension: string): string {
   return `song.${extension.toLowerCase()}`;
 }
 
-function songFile(itemId: Id, fileName: string): File {
-  // Names come from the database (and maybe backups later): only song.<ext>.
-  if (!/^song.[a-z0-9]{1,5}$/.test(fileName)) throw new Error(`Invalid song file name: ${fileName}`);
+/** File name of a video in its item's folder, e.g. "video.mp4". */
+export function videoFileName(extension: string): string {
+  return `video.${extension.toLowerCase()}`;
+}
+
+function mediaFile(itemId: Id, fileName: string): File {
+  // Names come from the database (and maybe backups later): only song.<ext> or video.<ext>.
+  if (!/^(song|video)\.[a-z0-9]{1,5}$/.test(fileName)) throw new Error(`Invalid media file name: ${fileName}`);
   return new File(bookDirectory(itemId), fileName);
 }
 
 /**
- * Puts a picked song into its item's folder. A temporary copy (one the app
- * made, or iOS's copy of the pick) is moved; the user's own file is copied.
- * Either way the native side does it, so the song never passes through memory.
+ * Puts a picked song or video into its item's folder. A temporary copy (one
+ * the app made, or iOS's copy of the pick) is moved; the user's own file is
+ * copied. Either way the native side does it, so the file never passes
+ * through memory.
  */
-export async function storeSongFile(itemId: Id, fileName: string, from: File, temporary: boolean): Promise<void> {
+export async function storeMediaFile(itemId: Id, fileName: string, from: File, temporary: boolean): Promise<void> {
   const directory = bookDirectory(itemId);
   directory.create({ idempotent: true, intermediates: true });
-  const destination = songFile(itemId, fileName);
+  const destination = mediaFile(itemId, fileName);
   if (temporary) await from.move(destination, { overwrite: true });
   else await from.copy(destination, { overwrite: true });
 }
 
-/** The stored song's file URI, for the player. */
-export function songUri(itemId: Id, fileName: string): string {
-  return songFile(itemId, fileName).uri;
+/** The stored song's or video's file URI, for the player. */
+export function mediaUri(itemId: Id, fileName: string): string {
+  return mediaFile(itemId, fileName).uri;
 }
 
 /** Writes (or overwrites) one chapter's text. */

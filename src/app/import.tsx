@@ -16,6 +16,8 @@ import {
 } from '@/books/importBook';
 import { ComicError, disposeComic, saveImportedComic } from '@/books/importComic';
 import { disposeSongs, saveImportedSongs, SongsError, type PickedSongs } from '@/books/importSongs';
+import { disposeVideos, saveImportedVideos, VideosError, type PickedVideos } from '@/books/importVideos';
+import { resolutionLabel } from '@/books/video/readVideo';
 import { AudioError } from '@/books/music/audioTags';
 import { EpubError } from '@/books/parseEpub';
 import { CHAPTER_LENGTH, parseTxt, type ParsedChapter, type SplitRule } from '@/books/parseTxt';
@@ -38,9 +40,10 @@ const PREVIEW_CHAPTERS = 30;
 const READING_MODES: ReadingMode[] = ['ltr', 'rtl', 'vertical'];
 
 /**
- * Import a .txt or .epub book, one or more comic files, or songs onto a shelf:
- * pick the file(s), check the chapters or tracks, fix the title or author (a
- * comic's reading direction, an album's artist), then save new items.
+ * Import a .txt or .epub book, one or more comic files, songs or videos onto
+ * a shelf: pick the file(s), check the chapters or tracks, fix the title or
+ * author (a comic's reading direction, an album's artist, each video's
+ * title), then save new items.
  */
 export default function ImportScreen() {
   const { shelfId } = useLocalSearchParams<{ shelfId: string }>();
@@ -62,11 +65,14 @@ export default function ImportScreen() {
   // For songs: artist and album for every song, or null to keep each song's own.
   const [songArtist, setSongArtist] = useState<string | null>(null);
   const [songAlbum, setSongAlbum] = useState<string | null>(null);
+  // For videos: each one's title, in the order picked.
+  const [videoTitles, setVideoTitles] = useState<string[]>([]);
 
   // Comics may have copied a file to the cache while picking; drop it when it's replaced or the screen closes.
   useEffect(() => {
     if (file?.kind === 'comic') return () => disposeComic(file.comic);
     if (file?.kind === 'songs') return () => disposeSongs(file.songs);
+    if (file?.kind === 'videos') return () => disposeVideos(file.videos);
   }, [file]);
 
   // TXT files are split here, so changing the rule re-splits; EPUBs come with their chapters.
@@ -98,6 +104,10 @@ export default function ImportScreen() {
       setSongArtist(null);
       setSongAlbum(null);
       if (picked.kind === 'songs') return;
+      if (picked.kind === 'videos') {
+        setVideoTitles(picked.videos.videos.map((v) => v.title));
+        return;
+      }
       if (picked.kind === 'comic') {
         const { comic } = picked;
         setTitle(comic.title);
@@ -132,6 +142,10 @@ export default function ImportScreen() {
     if (!shelf || !file || saving) return;
     if (file.kind === 'songs') {
       await saveSongs(file.songs);
+      return;
+    }
+    if (file.kind === 'videos') {
+      await saveVideos(file.videos);
       return;
     }
     if (!title.trim()) {
@@ -216,6 +230,40 @@ export default function ImportScreen() {
     }
   }
 
+  async function saveVideos(picked: PickedVideos) {
+    if (!shelf) return;
+    setProgress({ done: 0, total: picked.videos.length });
+    try {
+      const { items, failed } = await saveImportedVideos(
+        db,
+        dispatch,
+        shelf,
+        picked.videos.map((video, index) => ({
+          video,
+          title: videoTitles[index]?.trim() || video.title || t('import.untitledVideo'),
+          tagValues: { [t('tag.date')]: video.info.year, [t('tag.description')]: video.info.description },
+        })),
+        (done, total) => setProgress({ done, total }),
+      );
+      if (failed > 0) showMessage(t('import.videosFailed', { count: failed }));
+      if (items.length === 1) router.replace({ pathname: '/item/[id]', params: { id: items[0].id } });
+      else router.back();
+    } catch (error) {
+      setProgress(null);
+      showMessage(error instanceof VideosError ? errorText(error, t) : t('import.saveFailed', { error: String(error) }));
+    }
+  }
+
+  const savingKey =
+    file?.kind === 'comic'
+      ? 'import.savingPages'
+      : file?.kind === 'songs'
+        ? 'import.savingSongs'
+        : file?.kind === 'videos'
+          ? 'import.savingVideos'
+          : 'import.saving';
+  const introKind = shelf.kind === 'comic' || shelf.kind === 'music' || shelf.kind === 'video' ? shelf.kind : 'novel';
+
   return (
     <KeyboardAwareScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" bottomOffset={spacing.xl}>
       <Stack.Screen
@@ -230,16 +278,11 @@ export default function ImportScreen() {
       {saving ? (
         <View style={styles.center}>
           <ActivityIndicator />
-          <Text style={styles.hint}>
-            {t(file?.kind === 'comic' ? 'import.savingPages' : file?.kind === 'songs' ? 'import.savingSongs' : 'import.saving', {
-              done: progress.done,
-              total: progress.total,
-            })}
-          </Text>
+          <Text style={styles.hint}>{t(savingKey, { done: progress.done, total: progress.total })}</Text>
         </View>
       ) : !file ? (
         <View style={styles.center}>
-          {picking ? <ActivityIndicator /> : <Text style={styles.hint}>{t(`import.intro.${shelf.kind === 'comic' || shelf.kind === 'music' ? shelf.kind : 'novel'}`)}</Text>}
+          {picking ? <ActivityIndicator /> : <Text style={styles.hint}>{t(`import.intro.${introKind}`)}</Text>}
           <Button title={t('import.chooseFile')} variant="primary" disabled={picking} onPress={choose} />
         </View>
       ) : (
@@ -262,6 +305,7 @@ export default function ImportScreen() {
               </Text>
             )}
             {file.kind === 'songs' && <Text style={styles.hint}>{t('import.songs', { count: file.songs.songs.length })}</Text>}
+            {file.kind === 'videos' && <Text style={styles.hint}>{t('import.videos', { count: file.videos.videos.length })}</Text>}
             <Button title={t('import.chooseOther')} compact onPress={choose} style={styles.alignStart} />
           </View>
 
@@ -272,6 +316,14 @@ export default function ImportScreen() {
               album={songAlbum}
               onChangeArtist={setSongArtist}
               onChangeAlbum={setSongAlbum}
+            />
+          ) : file.kind === 'videos' ? (
+            <VideosPreview
+              picked={file.videos}
+              titles={videoTitles}
+              onChangeTitle={(index, title) =>
+                setVideoTitles((titles) => titles.map((old, i) => (i === index ? title : old)))
+              }
             />
           ) : (
             <>
@@ -326,7 +378,7 @@ export default function ImportScreen() {
             </View>
           )}
 
-          {file.kind !== 'songs' && (
+          {file.kind !== 'songs' && file.kind !== 'videos' && (
           <View style={styles.section}>
             <Text style={styles.label}>{t('import.chapters', { count: chapterRows.length })}</Text>
             <View style={styles.chapterList}>
@@ -424,6 +476,57 @@ function SongsPreview({ picked, artist, album, onChangeArtist, onChangeAlbum }: 
   );
 }
 
+interface VideosPreviewProps {
+  picked: PickedVideos;
+  titles: string[];
+  onChangeTitle: (index: number, title: string) => void;
+}
+
+/** Each video's title, ready to fix, with its length and size; then the files that were skipped. */
+function VideosPreview({ picked, titles, onChangeTitle }: VideosPreviewProps) {
+  const t = useT();
+  const styles = useStyles();
+  const { videos, skipped } = picked;
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.label}>{videos.length > 1 ? t('import.videoTitles') : t('tag.title')}</Text>
+      {videos.slice(0, PREVIEW_CHAPTERS).map((video, index) => {
+        const details = [
+          video.info.durationMs !== null ? durationLabel(video.info.durationMs) : '',
+          resolutionLabel(video.info.width, video.info.height),
+          video.info.format.toUpperCase(),
+        ].filter(Boolean);
+        return (
+          <View key={index} style={styles.videoRow}>
+            <TextField
+              value={titles[index] ?? ''}
+              onChangeText={(text) => onChangeTitle(index, text)}
+              placeholder={t('import.untitledVideo')}
+              accessibilityLabel={t('import.videoTitleLabel', { n: index + 1 })}
+            />
+            <Text style={styles.videoDetails} numberOfLines={1}>
+              {[video.name, ...details].filter(Boolean).join(' · ')}
+            </Text>
+          </View>
+        );
+      })}
+      {videos.length > PREVIEW_CHAPTERS && (
+        <Text style={styles.hint}>{t('import.videosMore', { count: videos.length - PREVIEW_CHAPTERS })}</Text>
+      )}
+      {skipped.length > 0 && (
+        <Text style={styles.hint}>
+          {t('import.songsSkipped', {
+            files: skipped
+              .map((s) => `${s.name || t('import.noFileName')} (${t(s.code === 'notOnThisPhone' ? 'import.reasonNotOnThisPhone' : 'import.reasonNotVideo')})`)
+              .join(', '),
+          })}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 /** Gives untitled chapters a name: the text before the first heading, or numbered parts. */
 function withTitles(chapters: ParsedChapter[], t: Translate): ParsedChapter[] {
   return chapters.map((chapter, index) => {
@@ -438,7 +541,10 @@ function wrongShelfText(error: WrongShelfError, shelf: Shelf, shelves: Shelf[], 
   const params = { shelf: shelf.name, kind: t(`shelfKind.${shelf.kind}`), file: t(`fileKind.${error.fileKind}`) };
   const problem =
     error.fileCount > 1
-      ? t('import.wrongShelfFiles', { ...params, files: t(error.fileKind === 'music' ? 'fileKinds.music' : 'fileKinds.comic') })
+      ? t('import.wrongShelfFiles', {
+          ...params,
+          files: t(error.fileKind === 'music' ? 'fileKinds.music' : error.fileKind === 'video' ? 'fileKinds.video' : 'fileKinds.comic'),
+        })
       : error.fileName
         ? t('import.wrongShelf', { ...params, name: error.fileName })
         : t('import.wrongShelfUnnamed', params);
@@ -456,6 +562,10 @@ function errorText(error: unknown, t: Translate): string {
   }
   if (error instanceof MixedFilesError) return t('import.mixedFiles');
   if (error instanceof AudioError) return t(error.code === 'video' ? 'import.isVideo' : 'import.notSong');
+  if (error instanceof VideosError) {
+    if (error.code === 'noSpace') return t('import.videosNoSpace');
+    return t(error.code === 'notOnThisPhone' ? 'import.videoNotOnThisPhone' : 'import.notVideo');
+  }
   if (error instanceof ComicError) return t(error.code === 'noSpace' ? 'import.comicNoSpace' : 'import.comicNoPages');
   if (error instanceof ZipError) {
     if (error.code === 'tooLarge') return t('import.comicTooLarge');
@@ -487,4 +597,6 @@ const useStyles = makeStyles((c) => ({
   trackNumber: { minWidth: 24, fontSize: fontSize.small, color: c.textMuted, textAlign: 'right' },
   songText: { flex: 1, minWidth: 0 },
   songArtist: { fontSize: fontSize.small, color: c.textMuted },
+  videoRow: { gap: spacing.xs },
+  videoDetails: { fontSize: fontSize.small, color: c.textMuted },
 }));

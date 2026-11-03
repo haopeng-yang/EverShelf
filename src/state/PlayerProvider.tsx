@@ -19,7 +19,7 @@ import {
   type RepeatMode,
 } from '@/models/queue';
 import type { Id, Item, Track } from '@/models/types';
-import { songUri } from '@/storage/bookFiles';
+import { mediaUri } from '@/storage/bookFiles';
 import {
   countPlay,
   loadPlaybackPosition,
@@ -70,7 +70,7 @@ export function queueEntries(items: Item[], tracks: ReadonlyMap<Id, Track>): Que
     return [
       {
         itemId: item.id,
-        uri: songUri(item.id, track.fileName),
+        uri: mediaUri(item.id, track.fileName),
         title: item.title,
         artist: artistOf(item),
         album: albumOf(item),

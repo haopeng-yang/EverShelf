@@ -53,7 +53,7 @@ A fifth shelf type, **Video**, for films, episodes and clips the user already ha
 * `SELECT_FILE_KINDS` includes videos, so the misplaced-item banner, Move targets and type changes all know about them.
 * New installs get a **Videos** shelf. Translations for the type in English and Chinese.
 
-## Phase 2 – Import
+## Phase 2 – Import ✅
 
 1. `detectFormat` learns video extensions and MIME types; `sniffVideo` knows MP4/MOV boxes and Matroska's EBML header. For any MP4-style file the `moov` box decides: video track → video, sound only → song.
 2. `readVideo` (pure, with tests): container format, length, width and height (from `tkhd`), and MP4 tags (title, year, description, cover art). Matroska's length comes from the player on first play.

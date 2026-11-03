@@ -15,6 +15,10 @@ export interface Mp4Info {
   hasAudio: boolean;
   /** An enabled video track: this is a film or clip, not a song. */
   hasVideo: boolean;
+  /** The video track's picture size as shown (turned for phone videos filmed upright), or null. */
+  videoSize: { width: number; height: number } | null;
+  /** The "desc" or "ldes" tag, which video apps use for a summary. */
+  description: string;
 }
 
 interface Box {
@@ -76,7 +80,7 @@ async function readMoov(source: ByteSource): Promise<Uint8Array | null> {
 
 export async function readMp4(source: ByteSource): Promise<Mp4Info> {
   const bytes = await readMoov(source);
-  if (!bytes) return { tags: EMPTY_TAGS, durationMs: null, hasAudio: false, hasVideo: false };
+  if (!bytes) return { tags: EMPTY_TAGS, durationMs: null, hasAudio: false, hasVideo: false, videoSize: null, description: '' };
   const moov = boxesIn(bytes, 0, bytes.length)[0];
 
   let durationMs: number | null = null;
@@ -93,6 +97,7 @@ export async function readMp4(source: ByteSource): Promise<Mp4Info> {
 
   let hasAudio = false;
   let hasVideo = false;
+  let videoSize: Mp4Info['videoSize'] = null;
   for (const trak of boxesIn(bytes, moov.start, moov.start + moov.length).filter((b) => b.type === 'trak')) {
     const hdlr = child(bytes, child(bytes, trak, 'mdia'), 'hdlr');
     // hdlr: version and flags, a reserved word, then the handler type.
@@ -101,19 +106,37 @@ export async function readMp4(source: ByteSource): Promise<Mp4Info> {
     // Audiobooks and some albums carry chapter pictures as a disabled video track; only an enabled one is video.
     const tkhd = child(bytes, trak, 'tkhd');
     const enabled = tkhd ? (bytes[tkhd.start + 3] & 1) === 1 : true;
-    if (handler === 'vide' && enabled) hasVideo = true;
+    if (handler === 'vide' && enabled) {
+      hasVideo = true;
+      videoSize ??= tkhd ? pictureSize(bytes, tkhd) : null;
+    }
   }
 
   const meta = child(bytes, child(bytes, moov, 'udta'), 'meta') ?? child(bytes, moov, 'meta');
-  return { tags: meta ? ilstTags(bytes, meta) : EMPTY_TAGS, durationMs, hasAudio, hasVideo };
+  const { tags, description } = meta ? ilstTags(bytes, meta) : { tags: EMPTY_TAGS, description: '' };
+  return { tags, durationMs, hasAudio, hasVideo, videoSize, description };
 }
 
-function ilstTags(bytes: Uint8Array, meta: Box): AudioTags {
+/**
+ * tkhd ends with a 3×3 matrix and the width and height as 16.16 fixed point.
+ * Version 1 has 64-bit times, which moves them 12 bytes on. A matrix whose
+ * first value is 0 turns the picture a quarter, so width and height swap.
+ */
+function pictureSize(bytes: Uint8Array, tkhd: Box): { width: number; height: number } | null {
+  const matrix = tkhd.start + (bytes[tkhd.start] === 1 ? 52 : 40);
+  if (matrix + 44 > tkhd.start + tkhd.length) return null;
+  const width = Math.round(u32(bytes, matrix + 36) / 65536);
+  const height = Math.round(u32(bytes, matrix + 40) / 65536);
+  if (width === 0 || height === 0) return null;
+  return u32(bytes, matrix) === 0 ? { width: height, height: width } : { width, height };
+}
+
+function ilstTags(bytes: Uint8Array, meta: Box): { tags: AudioTags; description: string } {
   // meta is usually a "full box" with 4 bytes of version and flags first; QuickTime's isn't.
   const skip = ascii(bytes, meta.start + 4, 4) === 'hdlr' ? 0 : 4;
   const inner: Box = { type: 'meta', start: meta.start + skip, length: meta.length - skip };
   const ilst = child(bytes, inner, 'ilst');
-  if (!ilst) return EMPTY_TAGS;
+  if (!ilst) return { tags: EMPTY_TAGS, description: '' };
 
   const values = new Map<string, { type: number; data: Uint8Array }>();
   for (const item of boxesIn(bytes, ilst.start, ilst.start + ilst.length)) {
@@ -141,7 +164,7 @@ function ilstTags(bytes: Uint8Array, meta: Box): AudioTags {
     ? coverOf(covr.data, covr.type === 14 ? 'image/png' : covr.type === 13 ? 'image/jpeg' : '')
     : null;
 
-  return {
+  const tags: AudioTags = {
     title: text('©nam'),
     artist: text('©ART'),
     album: text('©alb'),
@@ -152,4 +175,5 @@ function ilstTags(bytes: Uint8Array, meta: Box): AudioTags {
     lyrics: text('©lyr'),
     cover,
   };
+  return { tags, description: text('ldes') || text('desc') };
 }

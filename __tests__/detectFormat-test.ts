@@ -19,10 +19,22 @@ describe('detectFormat', () => {
 
   it('knows songs by extension, MIME type or first bytes', () => {
     const flac = new Uint8Array([0x66, 0x4c, 0x61, 0x43, 0, 0, 0, 34, 0, 0, 0, 0]);
-    for (const name of ['a.mp3', 'b.M4A', 'c.flac', 'd.wav', 'e.mp4', 'f.aac']) expect(detectFormat(text, name, '')).toBe('audio');
+    for (const name of ['a.mp3', 'b.M4A', 'c.flac', 'd.wav', 'f.aac']) expect(detectFormat(text, name, '')).toBe('audio');
     expect(detectFormat(flac, 'msf:7', '')).toBe('audio');
     expect(detectFormat(text, 'msf:7', 'audio/mpeg')).toBe('audio');
     expect(detectFormat(text, 'song.ogg', '')).toBeNull();
+  });
+
+  it('knows videos by extension, MIME type or first bytes, and leaves .mp4 to be looked inside', () => {
+    const ftyp = new Uint8Array([0, 0, 0, 16, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 0, 0]);
+    const ebml = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x80, 0, 0, 0]);
+    for (const name of ['a.mov', 'b.MKV', 'c.webm', 'd.m4v', 'e.3gp']) expect(detectFormat(text, name, '')).toBe('video');
+    expect(detectFormat(text, 'film.mp4', '')).toBe('mp4');
+    expect(detectFormat(ftyp, 'msf:9', '')).toBe('mp4');
+    expect(detectFormat(ftyp, 'msf:9', 'audio/mp4')).toBe('audio');
+    expect(detectFormat(ebml, 'msf:9', '')).toBe('video');
+    expect(detectFormat(text, 'msf:9', 'video/x-matroska')).toBe('video');
+    expect(detectFormat(text, 'film.avi', '')).toBeNull();
   });
 
   it('looks at the file itself for Android content links with no extension', () => {

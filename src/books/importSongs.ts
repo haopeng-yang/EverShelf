@@ -4,7 +4,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { fillTags, newItemDraft } from '../models/actions';
 import type { Item, Shelf, Track } from '../models/types';
 import type { ShelfDispatch } from '../state/ShelfProvider';
-import { deleteBookFiles, songFileName, storeSongFile } from '../storage/bookFiles';
+import { deleteBookFiles, songFileName, storeMediaFile } from '../storage/bookFiles';
 import { deleteCover, writeCoverBytes } from '../storage/covers';
 import { saveTrack } from '../storage/database';
 import { naturalCompare } from './comic/parseComic';
@@ -127,7 +127,7 @@ export async function saveImportedSongs(
     let itemAdded = false;
     try {
       const fileName = songFileName(song.info.extension);
-      await storeSongFile(draft.id, fileName, song.file, song.temporary);
+      await storeMediaFile(draft.id, fileName, song.file, song.temporary);
       if (song.info.cover) coverUri = await writeCoverBytes(song.info.cover.bytes, song.info.cover.extension);
       // The track row references the item, so the item is saved first.
       const item: Item = { ...draft, tags: fillTags(draft.tags, tagValues), coverUri };
