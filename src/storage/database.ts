@@ -16,6 +16,8 @@ import {
   type ReadingProgress,
   type ShelfState,
   type Track,
+  type Video,
+  type VideoSummary,
 } from '../models/types';
 import {
   rowsToState,
@@ -27,6 +29,10 @@ import {
   rowToProgress,
   rowToFileKind,
   rowToTrack,
+  rowToVideo,
+  rowToVideoSummary,
+  type VideoRow,
+  type VideoSummaryRow,
   type BookInfoRow,
   type BookmarkRow,
   type BookSummaryRow,
@@ -50,7 +56,13 @@ import {
   MIGRATE_V6,
   MIGRATE_V8,
   MIGRATE_V10,
+  migrateV11,
   SCHEMA_VERSION,
+  FINISH_VIDEO,
+  SAVE_WATCH_POSITION,
+  SELECT_VIDEO,
+  SELECT_VIDEO_SUMMARIES,
+  SET_VIDEO_DURATION,
   SET_READING_MODE,
   SELECT_BOOK_INFO,
   SELECT_BOOK_ITEM_IDS,
@@ -79,6 +91,7 @@ import {
   finishedStatements,
   insertBookmarkStatement,
   insertTrackStatement,
+  insertVideoStatement,
   insertState,
   replaceChapters,
   saveComicStatements,
@@ -131,7 +144,11 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
     if (version < 10) {
       await db.execAsync(MIGRATE_V10);
     }
-    // Future upgrades go here: if (version < 11) { ... }
+    if (version < 11) {
+      const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(playback_progress)');
+      for (const sql of migrateV11(columns.map((c) => c.name))) await db.execAsync(sql);
+    }
+    // Future upgrades go here: if (version < 12) { ... }
 
     // Seed the starting shelves only on a fresh install, so shelves the user
     // deletes later don't come back. They're named in the phone's language.
@@ -216,6 +233,40 @@ export async function savePlaybackPosition(db: SQLiteDatabase, itemId: Id, posit
 export async function countPlay(db: SQLiteDatabase, itemId: Id): Promise<void> {
   const now = Date.now();
   await db.runAsync(COUNT_PLAY, [itemId, now, now]);
+}
+
+/** A video's stored file and info, or null if the item isn't a video. */
+export async function loadVideo(db: SQLiteDatabase, itemId: Id): Promise<Video | null> {
+  const row = await db.getFirstAsync<VideoRow>(SELECT_VIDEO, [itemId]);
+  return row ? rowToVideo(row) : null;
+}
+
+/** Every video's length and watching progress, by item id. */
+export async function loadVideoSummaries(db: SQLiteDatabase): Promise<Map<Id, VideoSummary>> {
+  const rows = await db.getAllAsync<VideoSummaryRow>(SELECT_VIDEO_SUMMARIES);
+  return new Map(rows.map((row) => [row.item_id, rowToVideoSummary(row)]));
+}
+
+export async function saveVideo(db: SQLiteDatabase, video: Video): Promise<void> {
+  const s = insertVideoStatement(video);
+  await db.runAsync(s.sql, s.params);
+}
+
+/** Saves a length the player found out, for videos whose file didn't say. */
+export async function setVideoDuration(db: SQLiteDatabase, itemId: Id, durationMs: number): Promise<void> {
+  await db.runAsync(SET_VIDEO_DURATION, [Math.round(durationMs), itemId]);
+}
+
+/** Saves where a video was stopped, in ms. */
+export async function saveWatchPosition(db: SQLiteDatabase, itemId: Id, positionMs: number): Promise<void> {
+  const now = Date.now();
+  await db.runAsync(SAVE_WATCH_POSITION, [itemId, Math.round(positionMs), now, now]);
+}
+
+/** A video was played to the end: marks it watched and counts a play. */
+export async function finishVideo(db: SQLiteDatabase, itemId: Id): Promise<void> {
+  const now = Date.now();
+  await db.runAsync(FINISH_VIDEO, [itemId, now, now, now]);
 }
 
 export async function saveTrack(db: SQLiteDatabase, track: Track): Promise<void> {

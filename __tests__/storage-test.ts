@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { addItem, addShelf, addTag } from '../src/models/actions';
 import { createDefaultState } from '../src/models/defaults';
 import { shelfReducer, type ShelfAction } from '../src/models/shelfReducer';
-import type { BookInfo, Chapter, Id, Page, ShelfState, Track } from '../src/models/types';
+import type { BookInfo, Chapter, Id, Page, ShelfState, Track, Video } from '../src/models/types';
 import {
   rowsToState,
   rowToBookInfo,
@@ -17,6 +17,10 @@ import {
   rowToProgress,
   rowToFileKind,
   rowToTrack,
+  rowToVideo,
+  rowToVideoSummary,
+  type VideoRow,
+  type VideoSummaryRow,
   type BookInfoRow,
   type BookmarkRow,
   type BookSummaryRow,
@@ -39,6 +43,11 @@ import {
   MIGRATE_V6,
   MIGRATE_V8,
   MIGRATE_V10,
+  migrateV11 as migrateV11Statements,
+  FINISH_VIDEO,
+  SAVE_WATCH_POSITION,
+  SELECT_VIDEO,
+  SELECT_VIDEO_SUMMARIES,
   SELECT_BOOK_INFO,
   SELECT_BOOK_ITEM_IDS,
   SELECT_BOOK_SUMMARIES,
@@ -61,6 +70,7 @@ import {
   finishedStatements,
   insertBookmarkStatement,
   insertTrackStatement,
+  insertVideoStatement,
   insertState,
   replaceChapters,
   restoreBookStatements,
@@ -90,6 +100,13 @@ function migrateAll(db: DatabaseSync) {
   db.exec(MIGRATE_V8);
   migrateV9(db);
   db.exec(MIGRATE_V10);
+  migrateV11(db);
+}
+
+/** The version 11 upgrade, as migrate() in database.ts runs it. */
+function migrateV11(db: DatabaseSync) {
+  const columns = db.prepare('PRAGMA table_info(playback_progress)').all().map((c) => String(c.name));
+  for (const sql of migrateV11Statements(columns)) db.exec(sql);
 }
 
 /** Shelves as an app before version 9 saved them, with no kind column. */
@@ -528,6 +545,7 @@ describe('Shelf kinds', () => {
       manga: 'novel',
       anime: 'collection',
       music: 'music',
+      videos: 'video',
       novels: 'novel',
       mixed: 'comic',
       wishlist: 'collection',
@@ -591,6 +609,97 @@ describe('Song storage', () => {
     const itemId = state.items[0].id;
     db.prepare("INSERT INTO tracks (item_id, file_name, format) VALUES (?, 'song.xyz', 'xyz')").run(itemId);
     expect(loadTrack(db, itemId)).toMatchObject({ format: 'mp3', durationMs: null, lyrics: '' });
+  });
+});
+
+describe('Video storage', () => {
+  const loadVideo = (db: DatabaseSync, itemId: Id) => {
+    const row = db.prepare(SELECT_VIDEO).get(itemId);
+    return row ? rowToVideo({ ...row } as unknown as VideoRow) : null;
+  };
+  const loadSummary = (db: DatabaseSync, itemId: Id) => {
+    const row = db
+      .prepare(SELECT_VIDEO_SUMMARIES)
+      .all()
+      .find((r) => r.item_id === itemId);
+    return row ? rowToVideoSummary({ ...row } as unknown as VideoSummaryRow) : null;
+  };
+
+  function withVideo() {
+    const db = openTestDb();
+    let state = createDefaultState();
+    state = dispatch(db, state, addItem(state.shelves.find((s) => s.id === 'videos')!, 'Holiday'));
+    const itemId = state.items[0].id;
+    const video: Video = { itemId, fileName: 'video.mp4', format: 'mp4', durationMs: 90000, width: 1920, height: 1080 };
+    run(db, [insertVideoStatement(video)]);
+    return { db, state, itemId, video };
+  }
+
+  it('saves a video, knows it is one, and drops it with its item', () => {
+    const { db, state, itemId, video } = withVideo();
+    expect(loadVideo(db, itemId)).toEqual(video);
+    expect(
+      db
+        .prepare(SELECT_FILE_KINDS)
+        .all()
+        .map((r) => rowToFileKind({ ...r } as unknown as FileKindRow)),
+    ).toEqual(['video']);
+    expect(loadSummary(db, itemId)).toEqual({
+      itemId,
+      durationMs: 90000,
+      width: 1920,
+      height: 1080,
+      positionMs: 0,
+      lastWatchedAt: null,
+      finished: false,
+    });
+    dispatch(db, state, { type: 'item/remove', itemId });
+    expect(loadVideo(db, itemId)).toBeNull();
+  });
+
+  it('keeps where a video was stopped, and marks it watched at the end', () => {
+    const { db, itemId } = withVideo();
+    db.prepare(SAVE_WATCH_POSITION).run(itemId, 42000, 10, 10);
+    expect(loadSummary(db, itemId)).toMatchObject({ positionMs: 42000, lastWatchedAt: 10, finished: false });
+
+    db.prepare(FINISH_VIDEO).run(itemId, 20, 20, 20);
+    db.prepare(FINISH_VIDEO).run(itemId, 30, 30, 30);
+    expect(loadSummary(db, itemId)).toMatchObject({ positionMs: 0, lastWatchedAt: 30, finished: true });
+    expect(db.prepare('SELECT play_count FROM playback_progress WHERE item_id = ?').get(itemId)).toEqual({ play_count: 2 });
+
+    // Watching it again part-way makes it unwatched.
+    db.prepare(SAVE_WATCH_POSITION).run(itemId, 5000, 40, 40);
+    expect(loadSummary(db, itemId)).toMatchObject({ positionMs: 5000, finished: false });
+  });
+
+  it('an unknown stored format loads as mp4, and version 11 can run twice', () => {
+    const { db, itemId } = withVideo();
+    migrateV11(db);
+    db.prepare("UPDATE videos SET format = 'hologram' WHERE item_id = ?").run(itemId);
+    expect(loadVideo(db, itemId)?.format).toBe('mp4');
+  });
+
+  it('upgrading a version 10 database keeps its song progress', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec('PRAGMA foreign_keys = ON;');
+    db.exec(CREATE_TABLES_V1);
+    db.exec(CREATE_TABLES_V2);
+    db.exec(CREATE_TABLES_V3);
+    db.exec(MIGRATE_V4);
+    db.exec(MIGRATE_V5);
+    db.exec(MIGRATE_V6);
+    db.exec(MIGRATE_V8);
+    migrateV9(db);
+    db.exec(MIGRATE_V10);
+    run(db, insertState(createDefaultState()));
+    db.prepare("INSERT INTO items (id, shelf_id, title, created_at, updated_at) VALUES ('s1', 'music', 'Song', 1, 1)").run();
+    db.prepare("INSERT INTO playback_progress (item_id, position_ms, updated_at, play_count) VALUES ('s1', 7000, 1, 3)").run();
+    migrateV11(db);
+    expect(db.prepare('SELECT position_ms, play_count, finished_at FROM playback_progress').get()).toEqual({
+      position_ms: 7000,
+      play_count: 3,
+      finished_at: null,
+    });
   });
 });
 

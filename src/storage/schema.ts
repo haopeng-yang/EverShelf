@@ -2,7 +2,7 @@
 // run the same SQL against Node's built-in SQLite.
 
 /** Bump this and add a step in database.ts `migrate` whenever the tables change. */
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 export const CREATE_TABLES_V1 = `
 CREATE TABLE shelves (
@@ -173,6 +173,43 @@ CREATE TABLE IF NOT EXISTS playback_progress (
 );
 `;
 
+/**
+ * Version 11: videos. Like tracks, videos says which items are videos and how
+ * the file is stored; the title and details stay the item's. Watching
+ * progress shares playback_progress with songs, which gains finished_at for
+ * "Watched". Given playback_progress's column names, returns the statements
+ * to run, so a half-applied upgrade can run again (see the version 7 note).
+ */
+export function migrateV11(progressColumns: string[]): string[] {
+  return [
+    `CREATE TABLE IF NOT EXISTS videos (
+  item_id TEXT PRIMARY KEY NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  file_name TEXT NOT NULL,
+  format TEXT NOT NULL,
+  duration_ms INTEGER,
+  width INTEGER,
+  height INTEGER
+)`,
+    ...(progressColumns.includes('finished_at') ? [] : ['ALTER TABLE playback_progress ADD COLUMN finished_at INTEGER']),
+  ];
+}
+
+export const SELECT_VIDEO = 'SELECT item_id, file_name, format, duration_ms, width, height FROM videos WHERE item_id = ?';
+export const INSERT_VIDEO = 'INSERT INTO videos (item_id, file_name, format, duration_ms, width, height) VALUES (?, ?, ?, ?, ?, ?)';
+export const SET_VIDEO_DURATION = 'UPDATE videos SET duration_ms = ? WHERE item_id = ?';
+/** Every video, with how far it has been watched. */
+export const SELECT_VIDEO_SUMMARIES = `
+SELECT v.item_id, v.duration_ms, v.width, v.height, p.position_ms, p.last_played_at, p.finished_at
+FROM videos v LEFT JOIN playback_progress p ON p.item_id = v.item_id`;
+/** Saves where a video was stopped. Stopping part-way through makes a watched video unwatched again. */
+export const SAVE_WATCH_POSITION = `INSERT INTO playback_progress (item_id, position_ms, updated_at, last_played_at) VALUES (?, ?, ?, ?)
+ON CONFLICT(item_id) DO UPDATE SET position_ms = excluded.position_ms, updated_at = excluded.updated_at,
+  last_played_at = excluded.last_played_at, finished_at = NULL`;
+/** A video played to the end: watched, one more play, and next time it starts from the beginning. */
+export const FINISH_VIDEO = `INSERT INTO playback_progress (item_id, position_ms, updated_at, play_count, last_played_at, finished_at) VALUES (?, 0, ?, 1, ?, ?)
+ON CONFLICT(item_id) DO UPDATE SET position_ms = 0, updated_at = excluded.updated_at, play_count = play_count + 1,
+  last_played_at = excluded.last_played_at, finished_at = excluded.finished_at`;
+
 export const SELECT_TRACK = 'SELECT item_id, file_name, format, duration_ms, track_number, disc_number, lyrics FROM tracks WHERE item_id = ?';
 export const SELECT_TRACKS = 'SELECT item_id, file_name, format, duration_ms, track_number, disc_number, lyrics FROM tracks';
 export const SET_TRACK_DURATION = 'UPDATE tracks SET duration_ms = ? WHERE item_id = ?';
@@ -184,12 +221,14 @@ export const COUNT_PLAY = `INSERT INTO playback_progress (item_id, position_ms, 
 ON CONFLICT(item_id) DO UPDATE SET play_count = play_count + 1, last_played_at = excluded.last_played_at`;
 export const INSERT_TRACK = `INSERT INTO tracks (item_id, file_name, format, duration_ms, track_number, disc_number, lyrics)
 VALUES (?, ?, ?, ?, ?, ?, ?)`;
-/** What kind of file every item with one is: a book (text or comic) or a song. */
+/** What kind of file every item with one is: a book (text or comic), a song or a video. */
 export const SELECT_FILE_KINDS = `
 SELECT DISTINCT c.item_id, COALESCE(b.kind, 'text') AS kind
 FROM chapters c LEFT JOIN book_info b ON b.item_id = c.item_id
 UNION ALL
-SELECT item_id, 'music' AS kind FROM tracks`;
+SELECT item_id, 'music' AS kind FROM tracks
+UNION ALL
+SELECT item_id, 'video' AS kind FROM videos`;
 
 /** One row per book (item with chapters), with its kind and its progress if it has been opened. */
 export const SELECT_BOOK_SUMMARIES = `

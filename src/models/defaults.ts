@@ -16,6 +16,7 @@ export function createDefaultState(language: Language = 'en'): ShelfState {
       { id: 'manga', name: t('defaults.manga'), kind: 'comic', defaultTagNames: [t('tag.author'), date, description] },
       { id: 'anime', name: t('defaults.anime'), kind: 'collection', defaultTagNames: [t('tag.studio'), date, description] },
       { id: 'music', name: t('defaults.music'), kind: 'music', defaultTagNames: [t('tag.artist'), t('tag.album'), date] },
+      { id: 'videos', name: t('defaults.videos'), kind: 'video', defaultTagNames: [date, description] },
     ],
     items: [],
   };

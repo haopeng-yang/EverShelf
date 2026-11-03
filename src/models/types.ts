@@ -25,10 +25,10 @@ export interface Item {
  * how it looks when opened. Every kind can also hold manual entries (items
  * with no file); a 'collection' holds only those, e.g. Movies.
  */
-export type ShelfKind = 'collection' | 'novel' | 'comic' | 'music';
+export type ShelfKind = 'collection' | 'novel' | 'comic' | 'music' | 'video';
 
 /** What an imported file is. Each has a shelf kind of the same name that holds it. */
-export type FileKind = 'novel' | 'comic' | 'music';
+export type FileKind = 'novel' | 'comic' | 'music' | 'video';
 
 /** A top tab such as Books or Movies. */
 export interface Shelf {
@@ -111,6 +111,34 @@ export interface Track {
   discNumber: number | null;
   /** Plain lyrics from the file's tags, or ''. */
   lyrics: string;
+}
+
+/** How a video file is stored: the container, which decides where it can play (.mkv and .webm only on Android). */
+export type VideoFormat = 'mp4' | 'mov' | 'mkv' | 'webm' | '3gp';
+
+/** An imported video, stored at books/<itemId>/<fileName>. Its title and details are the item's title and tags. */
+export interface Video {
+  itemId: Id;
+  fileName: string;
+  format: VideoFormat;
+  /** Null until known: Matroska files don't say cheaply, and the player finds out on first play. */
+  durationMs: number | null;
+  /** Picture size in pixels, or null if the file doesn't say. */
+  width: number | null;
+  height: number | null;
+}
+
+/** What the video shelf needs to know about a video: its length and how far it has been watched. */
+export interface VideoSummary {
+  itemId: Id;
+  durationMs: number | null;
+  width: number | null;
+  height: number | null;
+  /** Where it was stopped, in ms; 0 if never played. */
+  positionMs: number;
+  /** When it was last played, or null if never. */
+  lastWatchedAt: number | null;
+  finished: boolean;
 }
 
 /** Where the user stopped reading a book. */

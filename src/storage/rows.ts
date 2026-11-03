@@ -16,6 +16,9 @@ import {
   type ShelfState,
   type Tag,
   type Track,
+  type Video,
+  type VideoFormat,
+  type VideoSummary,
 } from '../models/types';
 
 // Plain rows as they come out of the tables in schema.ts.
@@ -47,7 +50,27 @@ export interface TrackRow {
   lyrics: string;
 }
 
-/** A row of SELECT_FILE_KINDS: kind is 'text', 'comic' or 'music'. */
+export interface VideoRow {
+  item_id: string;
+  file_name: string;
+  format: string;
+  duration_ms: number | null;
+  width: number | null;
+  height: number | null;
+}
+
+/** A row of SELECT_VIDEO_SUMMARIES: the progress columns are null for a video never played. */
+export interface VideoSummaryRow {
+  item_id: string;
+  duration_ms: number | null;
+  width: number | null;
+  height: number | null;
+  position_ms: number | null;
+  last_played_at: number | null;
+  finished_at: number | null;
+}
+
+/** A row of SELECT_FILE_KINDS: kind is 'text', 'comic', 'music' or 'video'. */
 export interface FileKindRow {
   item_id: string;
   kind: string;
@@ -273,7 +296,33 @@ export function rowToTrack(row: TrackRow): Track {
 }
 
 export function rowToFileKind(row: FileKindRow): FileKind {
-  return row.kind === 'music' ? 'music' : fileKindOfBook(parseBookKind(row.kind));
+  if (row.kind === 'music' || row.kind === 'video') return row.kind;
+  return fileKindOfBook(parseBookKind(row.kind));
+}
+
+const VIDEO_FORMATS: VideoFormat[] = ['mp4', 'mov', 'mkv', 'webm', '3gp'];
+
+export function rowToVideo(row: VideoRow): Video {
+  return {
+    itemId: row.item_id,
+    fileName: row.file_name,
+    format: VIDEO_FORMATS.find((f) => f === row.format) ?? 'mp4',
+    durationMs: row.duration_ms,
+    width: row.width,
+    height: row.height,
+  };
+}
+
+export function rowToVideoSummary(row: VideoSummaryRow): VideoSummary {
+  return {
+    itemId: row.item_id,
+    durationMs: row.duration_ms,
+    width: row.width,
+    height: row.height,
+    positionMs: row.position_ms ?? 0,
+    lastWatchedAt: row.last_played_at,
+    finished: row.finished_at !== null,
+  };
 }
 
 const AUDIO_FORMATS: AudioFormat[] = ['mp3', 'm4a', 'flac', 'wav', 'aac'];

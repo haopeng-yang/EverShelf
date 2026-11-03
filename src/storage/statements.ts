@@ -13,12 +13,14 @@ import type {
   Shelf,
   ShelfState,
   Track,
+  Video,
 } from '../models/types';
 import { chapterToRow, itemToRow, pageToRow, parseBookKind, shelfToRow, tagToRow, type ShelfBookKindRow } from './rows';
 import {
   INSERT_BOOKMARK,
   INSERT_PAGE,
   INSERT_TRACK,
+  INSERT_VIDEO,
   SET_FINISHED,
   SET_SHELF_KIND,
   UPSERT_BOOK_INFO,
@@ -174,6 +176,13 @@ export function insertBookmarkStatement(bookmark: Bookmark): Statement {
   return {
     sql: INSERT_BOOKMARK,
     params: [bookmark.id, bookmark.itemId, bookmark.chapterId, bookmark.paragraph, bookmark.excerpt, bookmark.createdAt],
+  };
+}
+
+export function insertVideoStatement(video: Video): Statement {
+  return {
+    sql: INSERT_VIDEO,
+    params: [video.itemId, video.fileName, video.format, video.durationMs, video.width, video.height],
   };
 }
 

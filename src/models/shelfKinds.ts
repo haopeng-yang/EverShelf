@@ -4,7 +4,7 @@ import type { BookKind, FileKind, Id, Item, Shelf, ShelfKind } from './types';
 // through canHold, so the rule lives in one place.
 
 /** Every shelf kind, in the order the shelf editor lists them. */
-export const SHELF_KINDS: ShelfKind[] = ['collection', 'novel', 'comic', 'music'];
+export const SHELF_KINDS: ShelfKind[] = ['collection', 'novel', 'comic', 'music', 'video'];
 
 export function isShelfKind(value: unknown): value is ShelfKind {
   return SHELF_KINDS.some((kind) => kind === value);
@@ -53,10 +53,11 @@ const BUILT_IN_KINDS: Record<Id, ShelfKind> = {
   movies: 'collection',
   anime: 'collection',
   music: 'music',
+  videos: 'video',
 };
 
 /** When files of two kinds tie, the first of these wins (unless the built-in kind is one of them). */
-const TIE_ORDER: FileKind[] = ['novel', 'comic', 'music'];
+const TIE_ORDER: FileKind[] = ['novel', 'comic', 'music', 'video'];
 
 /**
  * The kind for a shelf that was made before shelves had kinds (an upgrade, or

@@ -19,10 +19,19 @@ describe('canHold', () => {
     expect(canHold('comic', 'music')).toBe(false);
     expect(canHold('music', 'music')).toBe(true);
     expect(canHold('collection', 'novel')).toBe(false);
+    expect(canHold('video', 'video')).toBe(true);
+    expect(canHold('video', 'music')).toBe(false);
+    expect(canHold('music', 'video')).toBe(false);
   });
 
   it('lets manual entries onto every shelf', () => {
-    for (const kind of ['collection', 'novel', 'comic', 'music'] as const) expect(canHold(kind, null)).toBe(true);
+    for (const kind of ['collection', 'novel', 'comic', 'music', 'video'] as const) expect(canHold(kind, null)).toBe(true);
+  });
+
+  it('keeps Movies a collection, and only a shelf of videos becomes a video shelf', () => {
+    expect(inferShelfKind('movies', [])).toBe('collection');
+    expect(inferShelfKind('videos', [])).toBe('video');
+    expect(inferShelfKind('a1b2c3', ['video', 'video', 'music'])).toBe('video');
   });
 });
 
@@ -90,7 +99,7 @@ describe('shelves and their items', () => {
     const { state, dune, akira, wish, summaries } = library();
     const ids = (items: typeof state.items) => moveTargets(state.shelves, 'books', items, summaries).map((s) => s.id);
     expect(ids([akira])).toEqual(['manga']);
-    expect(ids([wish])).toEqual(['movies', 'manga', 'anime', 'music']);
+    expect(ids([wish])).toEqual(['movies', 'manga', 'anime', 'music', 'videos']);
     expect(ids([akira, wish])).toEqual(['manga']);
     expect(ids([dune, wish])).toEqual([]);
     expect(ids([dune, akira])).toEqual([]);

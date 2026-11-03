@@ -164,6 +164,7 @@ describe('backup with shelf kinds', () => {
       'comic', // manga
       'collection', // anime
       'music', // music
+      'video', // videos
       'novel', // Reading, by the book on it
       'collection', // Songs: empty, and not a built-in shelf
     ]);

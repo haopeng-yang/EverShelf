@@ -37,7 +37,7 @@ describe('translations', () => {
   it('names first-run shelves in the phone language, keeping the same ids', () => {
     const english = createDefaultState('en');
     const chinese = createDefaultState('zh');
-    expect(chinese.shelves.map((s) => s.name)).toEqual(['书籍', '电影', '漫画', '动画', '音乐']);
+    expect(chinese.shelves.map((s) => s.name)).toEqual(['书籍', '电影', '漫画', '动画', '音乐', '视频']);
     expect(chinese.shelves[0].defaultTagNames).toEqual(['作者', '日期', '简介']);
     expect(chinese.shelves.map((s) => s.id)).toEqual(english.shelves.map((s) => s.id));
   });
