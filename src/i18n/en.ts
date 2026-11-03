@@ -193,6 +193,24 @@ export const en = {
   'exportSheet.onlyShelves': 'Only shelves, items, tags and covers will be backed up.',
   'exportSheet.export': 'Export',
   'exportSheet.noSpace': 'Not enough free space: this backup needs about {needed}, but only {free} is free.',
+  'settings.clearSection': 'Start over',
+  'settings.clearAll': 'Remove all items and shelves',
+  'settings.clearing': 'Removing…',
+  'settings.clearHint':
+    'Deletes every shelf and item, with their covers and imported books, comics, songs and videos. Your settings stay. Export a backup first if you might want them back.',
+  'settings.clearTitle1': 'Remove ALL items and shelves?',
+  'settings.clearMessage1':
+    'Are you sure you want to remove ALL {shelves} shelves and {items} items, with their covers and imported files?',
+  'settings.clearTitle2': 'Are you really sure?',
+  'settings.clearMessage2':
+    'Are you sure you want to remove ALL items and shelves? This cannot be undone. Only a backup can bring them back.',
+  'settings.clearTitle3': 'Last check',
+  'settings.clearMessage3': 'Are you sure you want to remove ALL items and shelves? Everything will be deleted now.',
+  'settings.clearContinue': 'Yes, continue',
+  'settings.clearConfirm': 'Remove everything',
+  'settings.clearedTitle': 'Everything removed',
+  'settings.cleared': 'All shelves and items have been removed.',
+  'settings.clearFailed': 'Could not remove everything',
   'settings.about': 'About',
   'settings.aboutFiles':
     'EverShelf only opens files you choose from your device. It does not download books from the internet. Please only import books you have the right to read.',

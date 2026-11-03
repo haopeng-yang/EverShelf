@@ -23,6 +23,7 @@ import {
   type BackupChoice,
   type BackupKind,
 } from '@/storage/backupFlow';
+import { pruneBooks } from '@/storage/bookFiles';
 import { pruneCovers } from '@/storage/covers';
 import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
@@ -32,7 +33,7 @@ export default function SettingsScreen() {
   const dispatch = useShelfDispatch();
   const styles = useStyles();
   const t = useT();
-  const [busy, setBusy] = useState<'export' | 'import' | null>(null);
+  const [busy, setBusy] = useState<'export' | 'import' | 'clear' | null>(null);
   const [exportSheetOpen, setExportSheetOpen] = useState(false);
   /** Whole percent done while exporting or restoring files, or null before any are copied. */
   const [percent, setPercent] = useState<number | null>(null);
@@ -118,6 +119,35 @@ export default function SettingsScreen() {
     }
   }
 
+  /** Removes every shelf and item, with their files, after asking three times. App settings stay. */
+  async function handleClearAll() {
+    const counts = { shelves: state.shelves.length, items: state.items.length };
+    for (const step of [1, 2, 3] as const) {
+      const ok = await confirm(
+        t(`settings.clearTitle${step}`),
+        t(`settings.clearMessage${step}`, counts),
+        step === 3 ? t('settings.clearConfirm') : t('settings.clearContinue'),
+        t('common.cancel'),
+      );
+      if (!ok) return;
+    }
+    setBusy('clear');
+    try {
+      if (!(await dispatch({ type: 'state/replace', state: { shelves: [], items: [] } }))) {
+        throw new Error('Could not remove everything');
+      }
+      // Rows went with their items; now the covers and imported files they used.
+      pruneCovers({ shelves: [], items: [] });
+      pruneBooks(new Set());
+      showMessage(t('settings.cleared'), t('settings.clearedTitle'));
+    } catch (error) {
+      console.error('Clear all failed', error);
+      showMessage(errorText(error, t), t('settings.clearFailed'));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: t('settings.title') }} />
@@ -195,6 +225,17 @@ export default function SettingsScreen() {
           onPress={handleImport}
         />
         <Text style={styles.hint}>{t('settings.backupHint')}</Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.label}>{t('settings.clearSection')}</Text>
+        <Button
+          title={busy === 'clear' ? t('settings.clearing') : t('settings.clearAll')}
+          variant="danger"
+          disabled={busy !== null || (state.shelves.length === 0 && state.items.length === 0)}
+          onPress={handleClearAll}
+        />
+        <Text style={styles.hint}>{t('settings.clearHint')}</Text>
       </View>
 
       <View style={styles.section}>
