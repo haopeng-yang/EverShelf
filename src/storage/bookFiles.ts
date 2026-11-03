@@ -1,5 +1,6 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
+import type { ByteSource } from '../books/comic/zip';
 import type { Id } from '../models/types';
 
 // Chapter text is stored as one UTF-8 file per chapter in
@@ -89,6 +90,54 @@ export async function storeMediaFile(itemId: Id, fileName: string, from: File, t
 /** The stored song's or video's file URI, for the player. */
 export function mediaUri(itemId: Id, fileName: string): string {
   return mediaFile(itemId, fileName).uri;
+}
+
+/** A stored comic page, song or video, with the folder it goes in. Throws if the name is neither. */
+function storedFile(itemId: Id, fileName: string): { folder: Directory; file: File } {
+  return pageFile(itemId, fileName) ?? { folder: bookDirectory(itemId), file: mediaFile(itemId, fileName) };
+}
+
+/** An item's whole folder size in bytes (chapters, pages, song or video), or 0 if it has none. */
+export function itemFolderSize(itemId: Id): number {
+  try {
+    const directory = bookDirectory(itemId);
+    return directory.exists ? (directory.size ?? 0) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Size in bytes of an item's stored comic page, song or video, or null if it's missing. */
+export function storedFileSize(itemId: Id, fileName: string): number | null {
+  try {
+    const { file } = storedFile(itemId, fileName);
+    return file.exists ? file.size : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Opens an item's stored comic page, song or video to read in parts (for backups). Close it when done. */
+export function openStoredFile(itemId: Id, fileName: string): ByteSource & { close(): void } {
+  const handle = storedFile(itemId, fileName).file.open();
+  return {
+    size: handle.size ?? 0,
+    read: async (offset, length) => {
+      // One read at a time: the handle has a single position.
+      handle.offset = offset;
+      return handle.readBytes(length);
+    },
+    close: () => handle.close(),
+  };
+}
+
+/** Creates (or empties) an item's comic page, song or video to write in parts (for restores). Close it when done. */
+export function createStoredFile(itemId: Id, fileName: string): { write(bytes: Uint8Array): Promise<void>; close(): void } {
+  const { folder, file } = storedFile(itemId, fileName);
+  folder.create({ idempotent: true, intermediates: true });
+  file.create({ overwrite: true });
+  const handle = file.open();
+  return { write: (bytes) => handle.writeBytes(bytes), close: () => handle.close() };
 }
 
 /** Writes (or overwrites) one chapter's text. */

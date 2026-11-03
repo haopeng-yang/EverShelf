@@ -60,6 +60,7 @@ import {
   SELECT_FILE_KINDS,
   SELECT_ITEMS,
   SELECT_PAGES,
+  SELECT_PLAYBACK,
   SELECT_PROGRESS,
   SELECT_SETTINGS,
   SELECT_SHELF_BOOK_KINDS,
@@ -79,6 +80,9 @@ import {
   insertState,
   replaceChapters,
   restoreBookStatements,
+  restoreComicStatements,
+  restoreSongStatements,
+  restoreVideoStatements,
   saveComicStatements,
   saveProgressStatement,
   shelfKindStatements,
@@ -813,5 +817,82 @@ describe('Shelf locks', () => {
     expect(load(db).shelves).toEqual([{ id: 's', name: 'Shelf', kind: 'collection', defaultTagNames: [] }]);
     // On a database that already has them, it does nothing.
     expect(shelfLockRepair(columns())).toEqual([]);
+  });
+});
+
+describe('Restoring comics, songs and videos from a backup', () => {
+  it('saves each one with its position, ready to read, play or watch', () => {
+    const db = openTestDb();
+    let state = createDefaultState();
+    state = dispatch(db, state, addItem(state.shelves.find((s) => s.id === 'manga')!, 'Akira'));
+    state = dispatch(db, state, addItem(state.shelves.find((s) => s.id === 'music')!, 'Blue'));
+    state = dispatch(db, state, addItem(state.shelves.find((s) => s.id === 'videos')!, 'Holiday'));
+    const [akira, blue, holiday] = state.items.map((i) => i.id);
+
+    run(
+      db,
+      restoreComicStatements({
+        itemId: akira,
+        readingMode: 'rtl',
+        chapters: [
+          { id: 'k1', title: 'Vol. 1', fileName: '0' },
+          { id: 'k2', title: 'Vol. 2', fileName: '1' },
+        ],
+        pages: [
+          { chapterId: 'k1', position: 0, fileName: '0/0.jpg', width: 800, height: 1200 },
+          { chapterId: 'k1', position: 1, fileName: '0/1.jpg', width: 800, height: 1200 },
+          { chapterId: 'k2', position: 0, fileName: '1/0.jpg', width: 800, height: 1200 },
+        ],
+        progress: { chapterId: 'k2', paragraph: 0, percent: 1, updatedAt: 5, finishedAt: 6 },
+      }),
+    );
+    expect(loadChapters(db, akira).map((c) => [c.title, c.fileName, c.charCount])).toEqual([
+      ['Vol. 1', '0', 2],
+      ['Vol. 2', '1', 1],
+    ]);
+    expect(db.prepare(SELECT_PAGES).all(akira)).toHaveLength(3);
+    expect(rowToBookInfo({ ...db.prepare(SELECT_BOOK_INFO).get(akira) } as unknown as BookInfoRow).readingMode).toBe('rtl');
+    expect(loadProgress(db, akira)).toMatchObject({ chapterId: 'k2', finishedAt: 6 });
+
+    const playback = { positionMs: 5000, updatedAt: 7, playCount: 3, lastPlayedAt: 7, finishedAt: null };
+    run(
+      db,
+      restoreSongStatements({
+        itemId: blue,
+        fileName: 'song.mp3',
+        format: 'mp3',
+        durationMs: 1000,
+        trackNumber: 1,
+        discNumber: 1,
+        lyrics: '',
+        playback,
+      }),
+    );
+    expect(rowToTrack({ ...db.prepare(SELECT_TRACK).get(blue) } as unknown as TrackRow).fileName).toBe('song.mp3');
+    expect({ ...db.prepare(SELECT_PLAYBACK).get(blue) }).toEqual({
+      position_ms: 5000,
+      updated_at: 7,
+      play_count: 3,
+      last_played_at: 7,
+      finished_at: null,
+    });
+
+    run(
+      db,
+      restoreVideoStatements({
+        itemId: holiday,
+        fileName: 'video.mkv',
+        format: 'mkv',
+        durationMs: null,
+        width: null,
+        height: null,
+        subtitleChoice: 'off',
+        audioChoice: null,
+        playback: null,
+      }),
+    );
+    expect(rowToVideo({ ...db.prepare(SELECT_VIDEO).get(holiday) } as unknown as VideoRow).subtitleChoice).toBe('off');
+    expect(db.prepare(SELECT_PLAYBACK).get(holiday)).toBeUndefined();
+    expect(db.prepare(SELECT_FILE_KINDS).all().map((r) => r.kind)).toEqual(['comic', 'music', 'video']);
   });
 });

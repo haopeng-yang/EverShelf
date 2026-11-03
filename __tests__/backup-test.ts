@@ -1,5 +1,15 @@
 import { addItem, addShelf, addTag } from '../src/models/actions';
-import { BackupError, backupFileName, createBackup, parseBackup, type BackupBook } from '../src/models/backup';
+import {
+  BackupError,
+  backupFileName,
+  createBackup,
+  mediaEntryName,
+  parseBackup,
+  type BackupBook,
+  type BackupComic,
+  type BackupSong,
+  type BackupVideo,
+} from '../src/models/backup';
 import { createDefaultState } from '../src/models/defaults';
 import { shelfReducer } from '../src/models/shelfReducer';
 import type { ShelfState } from '../src/models/types';
@@ -51,7 +61,7 @@ describe('backup', () => {
   });
 
   it('names files by date', () => {
-    expect(backupFileName(new Date(2026, 0, 5))).toBe('evershelf-backup-2026-01-05.json');
+    expect(backupFileName(new Date(2026, 0, 5))).toBe('evershelf-backup-2026-01-05.zip');
   });
 });
 
@@ -71,7 +81,7 @@ describe('backup with books', () => {
     JSON.stringify({ ...createBackup(state, new Map(), new Date('2026-10-28T00:00:00Z')), books });
 
   it('round-trips book text, progress and bookmarks', () => {
-    const file = createBackup(state, new Map(), new Date(), [book]);
+    const file = createBackup(state, new Map(), new Date(), { books: [book] });
     expect(parseBackup(JSON.stringify(file)).books).toEqual([book]);
   });
 
@@ -146,13 +156,13 @@ describe('backup with shelf kinds', () => {
 
   it('keeps every shelf’s kind', () => {
     const { state, book } = stateWithKinds();
-    const parsed = parseBackup(JSON.stringify(createBackup(state, new Map(), new Date(), [book])));
+    const parsed = parseBackup(JSON.stringify(createBackup(state, new Map(), new Date(), { books: [book] })));
     expect(parsed.state.shelves).toEqual(state.shelves);
   });
 
   it('works out the kinds for a backup made before shelves had them', () => {
     const { state, book } = stateWithKinds();
-    const file = createBackup(state, new Map(), new Date(), [book]);
+    const file = createBackup(state, new Map(), new Date(), { books: [book] });
     const old = {
       ...file,
       // The first shelf has a kind this version doesn't know, as if from a newer app.
@@ -168,5 +178,95 @@ describe('backup with shelf kinds', () => {
       'novel', // Reading, by the book on it
       'collection', // Songs: empty, and not a built-in shelf
     ]);
+  });
+});
+
+describe('backup with comics, songs and videos', () => {
+  let state = createDefaultState();
+  state = shelfReducer(state, addItem(state.shelves[2], 'Akira'));
+  state = shelfReducer(state, addItem(state.shelves[4], 'Blue Song'));
+  state = shelfReducer(state, addItem(state.shelves[5], 'Holiday'));
+  const [akira, song, holiday] = state.items;
+  const comic: BackupComic = {
+    itemId: akira.id,
+    readingMode: 'rtl',
+    chapters: [{ id: 'k1', title: 'Vol. 1', fileName: '0' }],
+    pages: [
+      { chapterId: 'k1', position: 0, fileName: '0/0.jpg', width: 800, height: 1200 },
+      { chapterId: 'k1', position: 1, fileName: '0/1.png', width: 800, height: 1200 },
+    ],
+    progress: { chapterId: 'k1', paragraph: 1, percent: 0.5, updatedAt: 3, finishedAt: null },
+  };
+  const track: BackupSong = {
+    itemId: song.id,
+    fileName: 'song.flac',
+    format: 'flac',
+    durationMs: 200000,
+    trackNumber: 2,
+    discNumber: null,
+    lyrics: 'La la',
+    playback: { positionMs: 5000, updatedAt: 7, playCount: 3, lastPlayedAt: 7, finishedAt: null },
+  };
+  const video: BackupVideo = {
+    itemId: holiday.id,
+    fileName: 'video.mp4',
+    format: 'mp4',
+    durationMs: null,
+    width: 1920,
+    height: 1080,
+    subtitleChoice: 'off',
+    audioChoice: null,
+    playback: null,
+  };
+  const file = () => createBackup(state, new Map(), new Date(), { comics: [comic], songs: [track], videos: [video] });
+
+  it('round-trips their details, positions and reading mode', () => {
+    const parsed = parseBackup(JSON.stringify(file()));
+    expect(parsed.comics).toEqual([comic]);
+    expect(parsed.songs).toEqual([track]);
+    expect(parsed.videos).toEqual([video]);
+    expect(parsed.books).toEqual([]);
+  });
+
+  it('leaves out the kinds not chosen', () => {
+    const songsOnly = createBackup(state, new Map(), new Date(), { songs: [track] });
+    expect(Object.keys(songsOnly).filter((k) => ['books', 'comics', 'songs', 'videos'].includes(k))).toEqual(['songs']);
+    expect(parseBackup(JSON.stringify(songsOnly)).comics).toEqual([]);
+  });
+
+  it('names the files inside the ZIP by item', () => {
+    expect(mediaEntryName('abc', '0/1.png')).toBe('files/abc/0/1.png');
+  });
+
+  it('refuses damaged records, numbering comics, songs and videos together', () => {
+    const code = (changes: object) => {
+      try {
+        parseBackup(JSON.stringify({ ...file(), ...changes }));
+        return 'ok';
+      } catch (error) {
+        return error instanceof BackupError ? `${error.code} ${error.params.n}` : String(error);
+      }
+    };
+    expect(code({})).toBe('ok');
+    expect(code({ comics: [{ ...comic, pages: [{ ...comic.pages[0], chapterId: 'gone' }] }] })).toBe('badMedia 1');
+    expect(code({ songs: [{ ...track, format: 'ogg' }] })).toBe('badMedia 2');
+    expect(code({ videos: [{ ...video, itemId: 'nope' }] })).toBe('badMedia 3');
+    // The same item can't be both a song and a video.
+    expect(code({ videos: [{ ...video, itemId: song.id }] })).toBe('badMedia 3');
+    expect(code({ songs: 'not a list' })).toBe('badMedia 2');
+  });
+
+  it('drops a playback position that is not readable', () => {
+    const parsed = parseBackup(JSON.stringify({ ...file(), songs: [{ ...track, playback: { positionMs: -1 } }] }));
+    expect(parsed.songs[0].playback).toBeNull();
+  });
+
+  it('works out shelf kinds from them for a backup without kinds', () => {
+    const custom = shelfReducer(state, addShelf('Mixed', [], undefined, 'collection'));
+    const onCustom = shelfReducer(custom, addItem(custom.shelves[6], 'Tune'));
+    const tune = onCustom.items[3];
+    const backup = createBackup(onCustom, new Map(), new Date(), { songs: [{ ...track, itemId: tune.id }] });
+    const old = { ...backup, shelves: backup.shelves.map(({ kind: _kind, ...shelf }) => shelf) };
+    expect(parseBackup(JSON.stringify(old)).state.shelves[6].kind).toBe('music');
   });
 });

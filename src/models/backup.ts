@@ -1,15 +1,44 @@
 import { translate } from '../i18n';
 import { inferShelfKind, isShelfKind } from './shelfKinds';
-import type { Bookmark, FileKind, Id, Item, ReadingProgress, Shelf, ShelfKind, ShelfState, Tag } from './types';
+import {
+  AUDIO_FORMATS,
+  READING_MODES,
+  VIDEO_FORMATS,
+  type Bookmark,
+  type FileKind,
+  type Id,
+  type Item,
+  type Page,
+  type ReadingMode,
+  type ReadingProgress,
+  type Shelf,
+  type ShelfKind,
+  type ShelfState,
+  type Tag,
+  type Track,
+  type Video,
+} from './types';
 
-// A backup is one JSON file holding every shelf and item. Covers are embedded
-// as data URIs ("data:image/jpeg;base64,...") so the file works on another phone.
+// A backup's JSON holds every shelf and item. Covers are embedded as data
+// URIs ("data:image/jpeg;base64,...") so the file works on another phone.
 // Since version 2 it can also hold imported books: chapter text, reading
 // position and bookmarks. Version 1 files (no books) still restore.
 // Shelves have a `kind` since update 4. It was added without a new version
 // number, because older apps just ignore it, and files without it still restore.
+// Since version 3 the backup is a ZIP: the JSON is BACKUP_JSON_NAME, and it
+// can also list comics, songs and videos, whose files sit beside it under
+// files/<item id>/ (see mediaEntryName). Each list is left out when that kind
+// wasn't chosen for the backup. A plain JSON backup from before still restores.
 
-export const BACKUP_FORMAT_VERSION = 2;
+export const BACKUP_FORMAT_VERSION = 3;
+
+/** The JSON's name inside a backup ZIP. */
+export const BACKUP_JSON_NAME = 'backup.json';
+
+/** Where an item's stored file (a comic page, song or video) goes in a backup ZIP, e.g. "files/abc/2/14.jpg". */
+export function mediaEntryName(itemId: Id, fileName: string): string {
+  return `files/${itemId}/${fileName}`;
+}
 
 interface BackupItem extends Omit<Item, 'coverUri'> {
   cover: string | null;
@@ -23,14 +52,42 @@ export interface BackupBook {
   bookmarks: Omit<Bookmark, 'itemId'>[];
 }
 
-export interface BackupFile {
+/** Where a song or video was stopped, how often it's been played, and when a video was watched. */
+export interface BackupPlayback {
+  positionMs: number;
+  updatedAt: number;
+  playCount: number;
+  lastPlayedAt: number | null;
+  finishedAt: number | null;
+}
+
+/** An imported comic. Its page images are separate files in the ZIP. A chapter's fileName is its pages' folder. */
+export interface BackupComic {
+  itemId: Id;
+  readingMode: ReadingMode;
+  chapters: { id: Id; title: string; fileName: string }[];
+  pages: Page[];
+  progress: Omit<ReadingProgress, 'itemId'> | null;
+}
+
+/** An imported song or video; the file itself is separate in the ZIP. */
+export type BackupSong = Track & { playback: BackupPlayback | null };
+export type BackupVideo = Video & { playback: BackupPlayback | null };
+
+/** Imported files to put in a backup, by kind. A kind left out isn't in the backup. */
+export interface BackupMedia {
+  books?: BackupBook[];
+  comics?: BackupComic[];
+  songs?: BackupSong[];
+  videos?: BackupVideo[];
+}
+
+export interface BackupFile extends BackupMedia {
   app: 'EverShelf';
   version: number;
   exportedAt: string;
   shelves: Shelf[];
   items: BackupItem[];
-  /** Missing in version 1 files, and when exported without books. */
-  books?: BackupBook[];
 }
 
 export interface ParsedBackup {
@@ -39,6 +96,9 @@ export interface ParsedBackup {
   /** Item id -> cover as a data URI. */
   covers: Map<Id, string>;
   books: BackupBook[];
+  comics: BackupComic[];
+  songs: BackupSong[];
+  videos: BackupVideo[];
 }
 
 export type BackupErrorCode =
@@ -52,7 +112,9 @@ export type BackupErrorCode =
   | 'itemShelfMissing'
   | 'duplicateItem'
   | 'badTag'
-  | 'badBook';
+  | 'badBook'
+  | 'badMedia'
+  | 'noBackupInZip';
 
 /** A problem with a backup file. `code` + `params` let screens show it in any language; `message` is English. */
 export class BackupError extends Error {
@@ -64,23 +126,15 @@ export class BackupError extends Error {
   }
 }
 
-/**
- * `covers` maps item id -> cover data URI, for items that have one.
- * `books` is left out of the file when null (a "shelf data only" backup).
- */
-export function createBackup(
-  state: ShelfState,
-  covers: Map<Id, string>,
-  exportedAt: Date,
-  books: BackupBook[] | null = null,
-): BackupFile {
+/** `covers` maps item id -> cover data URI, for items that have one. Kinds left out of `media` aren't in the file. */
+export function createBackup(state: ShelfState, covers: Map<Id, string>, exportedAt: Date, media: BackupMedia = {}): BackupFile {
   return {
     app: 'EverShelf',
     version: BACKUP_FORMAT_VERSION,
     exportedAt: exportedAt.toISOString(),
     shelves: state.shelves,
     items: state.items.map(({ coverUri: _coverUri, ...item }) => ({ ...item, cover: covers.get(item.id) ?? null })),
-    ...(books ? { books } : {}),
+    ...media,
   };
 }
 
@@ -132,9 +186,27 @@ export function parseBackup(text: string): ParsedBackup {
   const books = (data.books ?? []).map((raw, i) => parseBook(raw, i + 1, itemIds));
   if (new Set(books.map((b) => b.itemId)).size !== books.length) throw new BackupError('badBook', { n: books.length });
 
+  // Comics, songs and videos are numbered together in error messages.
+  let mediaCount = 0;
+  const list = <T>(raw: unknown, parse: (value: unknown, n: number) => T): T[] => {
+    if (raw === undefined) return [];
+    if (!Array.isArray(raw)) throw new BackupError('badMedia', { n: mediaCount + 1 });
+    return raw.map((value) => parse(value, ++mediaCount));
+  };
+  const comics = list(data.comics, (raw, n) => parseComic(raw, n, itemIds));
+  const songs = list(data.songs, (raw, n) => ({ ...parseTrack(raw, n, itemIds), playback: parsePlayback(raw) }));
+  const videos = list(data.videos, (raw, n) => ({ ...parseVideo(raw, n, itemIds), playback: parsePlayback(raw) }));
+  // An item can have at most one stored book, song or video.
+  const withFiles = [...books, ...comics, ...songs, ...videos].map((m) => m.itemId);
+  if (new Set(withFiles).size !== withFiles.length) throw new BackupError('badMedia', { n: mediaCount });
+
   // Shelves from before shelf kinds get the same guess as a database upgrade.
-  // The books in a backup are all novels (comics are backed up as plain items).
-  const shelfOfItem = new Map(items.map((item) => [item.id, item.shelfId]));
+  const kindOfItem = new Map<Id, FileKind>([
+    ...books.map((b): [Id, FileKind] => [b.itemId, 'novel']),
+    ...comics.map((c): [Id, FileKind] => [c.itemId, 'comic']),
+    ...songs.map((t): [Id, FileKind] => [t.itemId, 'music']),
+    ...videos.map((v): [Id, FileKind] => [v.itemId, 'video']),
+  ]);
   const typedShelves = shelves.map(
     (shelf): Shelf => ({
       ...shelf,
@@ -142,12 +214,15 @@ export function parseBackup(text: string): ParsedBackup {
         shelf.kind ??
         inferShelfKind(
           shelf.id,
-          books.filter((b) => shelfOfItem.get(b.itemId) === shelf.id).map((): FileKind => 'novel'),
+          items.flatMap((item) => {
+            const kind = kindOfItem.get(item.id);
+            return item.shelfId === shelf.id && kind ? [kind] : [];
+          }),
         ),
     }),
   );
 
-  return { state: { shelves: typedShelves, items }, covers, books };
+  return { state: { shelves: typedShelves, items }, covers, books, comics, songs, videos };
 }
 
 /**
@@ -168,21 +243,7 @@ function parseBook(raw: unknown, n: number, itemIds: Set<Id>): BackupBook {
   const chapterIds = new Set(chapters.map((c) => c.id));
   if (chapters.length === 0 || chapterIds.size !== chapters.length) throw new BackupError('badBook', { n });
 
-  const p = raw.progress;
-  const progress =
-    isObject(p) &&
-    typeof p.chapterId === 'string' &&
-    chapterIds.has(p.chapterId) &&
-    typeof p.paragraph === 'number' &&
-    typeof p.updatedAt === 'number'
-      ? {
-          chapterId: p.chapterId,
-          paragraph: Math.max(0, Math.floor(p.paragraph)),
-          percent: typeof p.percent === 'number' ? Math.min(1, Math.max(0, p.percent)) : 0,
-          updatedAt: p.updatedAt,
-          finishedAt: typeof p.finishedAt === 'number' ? p.finishedAt : null,
-        }
-      : null;
+  const progress = parseProgress(raw.progress, chapterIds);
 
   const bookmarks = (Array.isArray(raw.bookmarks) ? raw.bookmarks : []).flatMap((b) =>
     isObject(b) &&
@@ -197,6 +258,117 @@ function parseBook(raw: unknown, n: number, itemIds: Set<Id>): BackupBook {
   );
 
   return { itemId: raw.itemId, chapters, progress, bookmarks };
+}
+
+/** A reading position that doesn't fit the book is dropped: losing it is better than refusing the backup. */
+function parseProgress(p: unknown, chapterIds: Set<Id>): Omit<ReadingProgress, 'itemId'> | null {
+  return isObject(p) &&
+    typeof p.chapterId === 'string' &&
+    chapterIds.has(p.chapterId) &&
+    typeof p.paragraph === 'number' &&
+    typeof p.updatedAt === 'number'
+    ? {
+        chapterId: p.chapterId,
+        paragraph: Math.max(0, Math.floor(p.paragraph)),
+        percent: typeof p.percent === 'number' ? Math.min(1, Math.max(0, p.percent)) : 0,
+        updatedAt: p.updatedAt,
+        finishedAt: typeof p.finishedAt === 'number' ? p.finishedAt : null,
+      }
+    : null;
+}
+
+/**
+ * A comic needs every chapter and page, since they are the comic. The files'
+ * names are checked again when they're written back (see bookFiles.ts).
+ */
+function parseComic(raw: unknown, n: number, itemIds: Set<Id>): BackupComic {
+  if (!isObject(raw) || typeof raw.itemId !== 'string' || !itemIds.has(raw.itemId)) throw new BackupError('badMedia', { n });
+  if (!Array.isArray(raw.chapters) || !Array.isArray(raw.pages)) throw new BackupError('badMedia', { n });
+  const chapters = raw.chapters.map((c) => {
+    if (!isObject(c) || typeof c.id !== 'string' || typeof c.title !== 'string' || typeof c.fileName !== 'string') {
+      throw new BackupError('badMedia', { n });
+    }
+    return { id: c.id, title: c.title, fileName: c.fileName };
+  });
+  const chapterIds = new Set(chapters.map((c) => c.id));
+  if (chapters.length === 0 || chapterIds.size !== chapters.length) throw new BackupError('badMedia', { n });
+  const pages = raw.pages.map((p): Page => {
+    if (
+      !isObject(p) ||
+      typeof p.chapterId !== 'string' ||
+      !chapterIds.has(p.chapterId) ||
+      !isWhole(p.position) ||
+      typeof p.fileName !== 'string' ||
+      !isWhole(p.width) ||
+      !isWhole(p.height)
+    ) {
+      throw new BackupError('badMedia', { n });
+    }
+    return { chapterId: p.chapterId, position: p.position, fileName: p.fileName, width: p.width, height: p.height };
+  });
+  return {
+    itemId: raw.itemId,
+    readingMode: READING_MODES.find((m) => m === raw.readingMode) ?? 'ltr',
+    chapters,
+    pages,
+    progress: parseProgress(raw.progress, chapterIds),
+  };
+}
+
+function parseTrack(raw: unknown, n: number, itemIds: Set<Id>): Track {
+  if (!isObject(raw) || typeof raw.itemId !== 'string' || !itemIds.has(raw.itemId) || typeof raw.fileName !== 'string') {
+    throw new BackupError('badMedia', { n });
+  }
+  const format = AUDIO_FORMATS.find((f) => f === raw.format);
+  if (!format) throw new BackupError('badMedia', { n });
+  return {
+    itemId: raw.itemId,
+    fileName: raw.fileName,
+    format,
+    durationMs: wholeOrNull(raw.durationMs),
+    trackNumber: wholeOrNull(raw.trackNumber),
+    discNumber: wholeOrNull(raw.discNumber),
+    lyrics: typeof raw.lyrics === 'string' ? raw.lyrics : '',
+  };
+}
+
+function parseVideo(raw: unknown, n: number, itemIds: Set<Id>): Video {
+  if (!isObject(raw) || typeof raw.itemId !== 'string' || !itemIds.has(raw.itemId) || typeof raw.fileName !== 'string') {
+    throw new BackupError('badMedia', { n });
+  }
+  const format = VIDEO_FORMATS.find((f) => f === raw.format);
+  if (!format) throw new BackupError('badMedia', { n });
+  return {
+    itemId: raw.itemId,
+    fileName: raw.fileName,
+    format,
+    durationMs: wholeOrNull(raw.durationMs),
+    width: wholeOrNull(raw.width),
+    height: wholeOrNull(raw.height),
+    subtitleChoice: typeof raw.subtitleChoice === 'string' ? raw.subtitleChoice : null,
+    audioChoice: typeof raw.audioChoice === 'string' ? raw.audioChoice : null,
+  };
+}
+
+/** Like a reading position, a playback position that doesn't fit is dropped. */
+function parsePlayback(raw: unknown): BackupPlayback | null {
+  const p = isObject(raw) ? raw.playback : null;
+  if (!isObject(p) || !isWhole(p.positionMs) || typeof p.updatedAt !== 'number') return null;
+  return {
+    positionMs: p.positionMs,
+    updatedAt: p.updatedAt,
+    playCount: isWhole(p.playCount) ? p.playCount : 0,
+    lastPlayedAt: typeof p.lastPlayedAt === 'number' ? p.lastPlayedAt : null,
+    finishedAt: typeof p.finishedAt === 'number' ? p.finishedAt : null,
+  };
+}
+
+function isWhole(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+function wholeOrNull(value: unknown): number | null {
+  return isWhole(value) ? value : null;
 }
 
 /** `kind` is left out when the file has none (or one this version doesn't know); parseBackup fills it in. */
@@ -236,8 +408,8 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** e.g. "evershelf-backup-2026-10-27.json" */
+/** e.g. "evershelf-backup-2026-10-27.zip" */
 export function backupFileName(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `evershelf-backup-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}.json`;
+  return `evershelf-backup-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}.zip`;
 }

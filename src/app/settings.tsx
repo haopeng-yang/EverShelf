@@ -1,18 +1,28 @@
 import Constants from 'expo-constants';
 import { Stack } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { confirm, showMessage } from '@/components/dialogs';
+import { ExportBackupSheet, formatBytes } from '@/components/ExportBackupSheet';
 import type { Translate } from '@/i18n';
 import { useT } from '@/i18n/useT';
 import { BackupError, parseBackup } from '@/models/backup';
 import { useSettings, type LanguageSetting, type ThemeMode } from '@/state/SettingsProvider';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
-import { pickBackupFile } from '@/storage/backupFiles';
-import { exportBackup, restoreBackupBooks, restoreBackupCovers } from '@/storage/backupFlow';
+import { openBackupFile } from '@/storage/backupFiles';
+import {
+  BACKUP_KINDS,
+  exportBackup,
+  NotEnoughSpaceError,
+  restorableCounts,
+  restoreBackupCovers,
+  restoreBackupFiles,
+  type BackupChoice,
+  type BackupKind,
+} from '@/storage/backupFlow';
 import { pruneCovers } from '@/storage/covers';
 import { fontSize, makeStyles, radius, spacing } from '@/theme';
 
@@ -23,8 +33,22 @@ export default function SettingsScreen() {
   const styles = useStyles();
   const t = useT();
   const [busy, setBusy] = useState<'export' | 'import' | null>(null);
-  const [includeBooks, setIncludeBooks] = useState(true);
+  const [exportSheetOpen, setExportSheetOpen] = useState(false);
+  /** Whole percent done while exporting or restoring files, or null before any are copied. */
+  const [percent, setPercent] = useState<number | null>(null);
   const db = useSQLiteContext();
+  // Files are copied a megabyte at a time; only re-render when the shown percent changes.
+  const lastPercent = useRef<number | null>(null);
+  const showProgress = (done: number, total: number) => {
+    const next = total > 0 ? Math.floor((done / total) * 100) : 0;
+    if (next === lastPercent.current) return;
+    lastPercent.current = next;
+    setPercent(next);
+  };
+  const stopProgress = () => {
+    lastPercent.current = null;
+    setPercent(null);
+  };
 
   const themeOptions: { value: ThemeMode; label: string }[] = [
     { value: 'system', label: t('settings.system') },
@@ -38,54 +62,59 @@ export default function SettingsScreen() {
     { value: 'zh', label: '中文' },
   ];
 
-  async function handleExport() {
+  async function handleExport(choice: BackupChoice) {
+    setExportSheetOpen(false);
     setBusy('export');
     try {
-      await exportBackup(db, state, includeBooks);
+      await exportBackup(db, state, choice, showProgress);
     } catch (error) {
-      console.error('Export failed', error);
+      if (!(error instanceof NotEnoughSpaceError)) console.error('Export failed', error);
       showMessage(errorText(error, t), t('settings.exportFailed'));
     } finally {
       setBusy(null);
+      stopProgress();
     }
   }
 
   async function handleImport() {
     setBusy('import');
+    let opened: Awaited<ReturnType<typeof openBackupFile>> = null;
     try {
-      const text = await pickBackupFile();
-      if (text === null) return;
-      const backup = parseBackup(text);
+      opened = await openBackupFile();
+      if (opened === null) return;
+      const backup = parseBackup(opened.json);
       const message = t('settings.replaceMessage', {
         backupShelves: backup.state.shelves.length,
         backupItems: backup.state.items.length,
         shelves: state.shelves.length,
         items: state.items.length,
       });
-      const booksNote =
-        backup.books.length > 0 ? t('settings.replaceBooks', { count: backup.books.length }) : t('settings.replaceNoBooks');
+      const files = kindList(restorableCounts(backup, opened), t);
+      const filesNote = files ? t('settings.replaceFiles', { list: files }) : t('settings.replaceNoFiles');
       const ok = await confirm(
         t('settings.replaceTitle'),
-        `${message}\n\n${booksNote}`,
+        `${message}\n\n${filesNote}`,
         t('settings.replace'),
         t('common.cancel'),
       );
       if (!ok) return;
       const restored = await restoreBackupCovers(backup);
-      // Books belong to items, so the items must be saved before the books go in.
+      // Books, comics, songs and videos belong to items, so the items must be saved before they go in.
       if (!(await dispatch({ type: 'state/replace', state: restored }))) throw new Error('Could not save the backup');
       pruneCovers(restored);
-      const books = await restoreBackupBooks(db, backup);
+      const restoredFiles = kindList(await restoreBackupFiles(db, backup, opened, showProgress), t);
       showMessage(
         t('settings.restored', { shelves: restored.shelves.length, items: restored.items.length }) +
-          (books > 0 ? `\n${t('settings.restoredBooks', { count: books })}` : ''),
+          (restoredFiles ? `\n${t('settings.restoredFiles', { list: restoredFiles })}` : ''),
         t('settings.restoredTitle'),
       );
     } catch (error) {
       if (!(error instanceof BackupError)) console.error('Import failed', error);
       showMessage(errorText(error, t), t('settings.importFailed'));
     } finally {
+      opened?.close();
       setBusy(null);
+      stopProgress();
     }
   }
 
@@ -143,23 +172,25 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.label}>{t('settings.backup')}</Text>
-        {/* Books can only be imported on a phone, so the web version has none to include. */}
-        {Platform.OS !== 'web' && (
-          <View style={styles.switchRow}>
-            <View style={styles.switchText}>
-              <Text style={styles.switchLabel}>{t('settings.includeBooks')}</Text>
-              <Text style={styles.hint}>{t('settings.includeBooksHint')}</Text>
-            </View>
-            <Switch value={includeBooks} onValueChange={setIncludeBooks} disabled={busy !== null} />
-          </View>
-        )}
         <Button
-          title={busy === 'export' ? t('settings.exporting') : t('settings.export')}
+          title={
+            busy !== 'export'
+              ? t('settings.export')
+              : percent === null
+                ? t('settings.exporting')
+                : t('settings.exportingPercent', { percent })
+          }
           disabled={busy !== null}
-          onPress={handleExport}
+          onPress={() => setExportSheetOpen(true)}
         />
         <Button
-          title={busy === 'import' ? t('settings.importing') : t('settings.import')}
+          title={
+            busy !== 'import'
+              ? t('settings.import')
+              : percent === null
+                ? t('settings.importing')
+                : t('settings.importingPercent', { percent })
+          }
           disabled={busy !== null}
           onPress={handleImport}
         />
@@ -170,6 +201,8 @@ export default function SettingsScreen() {
         <Text style={styles.label}>{t('settings.about')}</Text>
         <Text style={styles.hint}>{t('settings.aboutFiles')}</Text>
       </View>
+
+      <ExportBackupSheet visible={exportSheetOpen} onExport={handleExport} onClose={() => setExportSheetOpen(false)} />
 
       <Text style={styles.footer}>
         EverShelf {Constants.expoConfig?.version ?? ''} ·{' '}
@@ -209,8 +242,18 @@ function Segmented<T extends string>({
   );
 }
 
+/** "3 books, 2 comics, 1 video": the kinds with any, or '' if none. */
+function kindList(counts: Record<BackupKind, number>, t: Translate): string {
+  return BACKUP_KINDS.filter((kind) => counts[kind] > 0)
+    .map((kind) => t(`backupCount.${kind}`, { count: counts[kind] }))
+    .join(t('common.listSeparator'));
+}
+
 function errorText(error: unknown, t: Translate): string {
   if (error instanceof BackupError) return t(`backupError.${error.code}`, error.params);
+  if (error instanceof NotEnoughSpaceError) {
+    return t('exportSheet.noSpace', { needed: formatBytes(error.needed), free: formatBytes(error.free) });
+  }
   return error instanceof Error ? error.message : String(error);
 }
 

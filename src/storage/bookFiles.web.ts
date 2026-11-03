@@ -1,3 +1,4 @@
+import type { ByteSource } from '../books/comic/zip';
 import type { Id } from '../models/types';
 
 // Web version of bookFiles.ts: browsers have no app documents folder, so
@@ -45,6 +46,22 @@ export async function writeChapterText(_itemId: Id, _fileName: string, _text: st
 
 export async function readChapterText(_itemId: Id, _fileName: string): Promise<string | null> {
   return null;
+}
+
+export function itemFolderSize(_itemId: Id): number {
+  return 0;
+}
+
+export function storedFileSize(_itemId: Id, _fileName: string): number | null {
+  return null;
+}
+
+export function openStoredFile(_itemId: Id, _fileName: string): ByteSource & { close(): void } {
+  throw new Error('Stored files are not supported on web');
+}
+
+export function createStoredFile(_itemId: Id, _fileName: string): { write(bytes: Uint8Array): Promise<void>; close(): void } {
+  throw new Error('Stored files are not supported on web');
 }
 
 export function deleteBookFiles(_itemId: Id): void {}

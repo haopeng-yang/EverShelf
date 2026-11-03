@@ -1,7 +1,9 @@
 import { fileKindOfBook, isShelfKind } from '../models/shelfKinds';
 import {
+  AUDIO_FORMATS,
   DEFAULT_READING_MODE,
-  type AudioFormat,
+  READING_MODES,
+  VIDEO_FORMATS,
   type BookInfo,
   type BookKind,
   type Bookmark,
@@ -17,7 +19,6 @@ import {
   type Tag,
   type Track,
   type Video,
-  type VideoFormat,
   type VideoSummary,
 } from '../models/types';
 
@@ -302,8 +303,6 @@ export function rowToFileKind(row: FileKindRow): FileKind {
   return fileKindOfBook(parseBookKind(row.kind));
 }
 
-const VIDEO_FORMATS: VideoFormat[] = ['mp4', 'mov', 'mkv', 'webm', '3gp'];
-
 export function rowToVideo(row: VideoRow): Video {
   return {
     itemId: row.item_id,
@@ -329,14 +328,10 @@ export function rowToVideoSummary(row: VideoSummaryRow): VideoSummary {
   };
 }
 
-const AUDIO_FORMATS: AudioFormat[] = ['mp3', 'm4a', 'flac', 'wav', 'aac'];
-
 // Values written by a newer version of the app fall back to the defaults.
 export function parseBookKind(value: string): BookKind {
   return value === 'comic' ? 'comic' : 'text';
 }
-
-const READING_MODES: ReadingMode[] = ['ltr', 'rtl', 'vertical'];
 
 function parseReadingMode(value: string): ReadingMode {
   return READING_MODES.find((mode) => mode === value) ?? DEFAULT_READING_MODE;

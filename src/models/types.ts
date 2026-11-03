@@ -74,6 +74,7 @@ export type BookKind = 'text' | 'comic';
 
 /** How a comic is read: pages left to right, right to left (manga), or one vertical strip (webtoon). */
 export type ReadingMode = 'ltr' | 'rtl' | 'vertical';
+export const READING_MODES: ReadingMode[] = ['ltr', 'rtl', 'vertical'];
 
 export const DEFAULT_READING_MODE: ReadingMode = 'ltr';
 
@@ -98,6 +99,7 @@ export interface Page {
 
 /** How a song file is stored. Title, artist and album are the item's title and tags, so the user can edit them. */
 export type AudioFormat = 'mp3' | 'm4a' | 'flac' | 'wav' | 'aac';
+export const AUDIO_FORMATS: AudioFormat[] = ['mp3', 'm4a', 'flac', 'wav', 'aac'];
 
 /** An imported song, stored at books/<itemId>/<fileName>. */
 export interface Track {
@@ -115,6 +117,7 @@ export interface Track {
 
 /** How a video file is stored: the container, which decides where it can play (.mkv and .webm only on Android). */
 export type VideoFormat = 'mp4' | 'mov' | 'mkv' | 'webm' | '3gp';
+export const VIDEO_FORMATS: VideoFormat[] = ['mp4', 'mov', 'mkv', 'webm', '3gp'];
 
 /** An imported video, stored at books/<itemId>/<fileName>. Its title and details are the item's title and tags. */
 export interface Video {

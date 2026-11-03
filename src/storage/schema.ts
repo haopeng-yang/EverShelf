@@ -232,6 +232,11 @@ ON CONFLICT(item_id) DO UPDATE SET position_ms = 0, updated_at = excluded.update
 export const SELECT_TRACK = 'SELECT item_id, file_name, format, duration_ms, track_number, disc_number, lyrics FROM tracks WHERE item_id = ?';
 export const SELECT_TRACKS = 'SELECT item_id, file_name, format, duration_ms, track_number, disc_number, lyrics FROM tracks';
 export const SET_TRACK_DURATION = 'UPDATE tracks SET duration_ms = ? WHERE item_id = ?';
+/** Everything about where a song or video was stopped, for backups. */
+export const SELECT_PLAYBACK =
+  'SELECT position_ms, updated_at, play_count, last_played_at, finished_at FROM playback_progress WHERE item_id = ?';
+export const INSERT_PLAYBACK = `INSERT INTO playback_progress (item_id, position_ms, updated_at, play_count, last_played_at, finished_at)
+VALUES (?, ?, ?, ?, ?, ?)`;
 export const SELECT_PLAYBACK_POSITION = 'SELECT position_ms FROM playback_progress WHERE item_id = ?';
 export const UPSERT_PLAYBACK_POSITION = `INSERT INTO playback_progress (item_id, position_ms, updated_at) VALUES (?, ?, ?)
 ON CONFLICT(item_id) DO UPDATE SET position_ms = excluded.position_ms, updated_at = excluded.updated_at`;

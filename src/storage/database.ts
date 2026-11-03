@@ -2,6 +2,7 @@ import { getLocales } from 'expo-localization';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { languageFromCode } from '../i18n';
+import type { BackupPlayback } from '../models/backup';
 import { createDefaultState } from '../models/defaults';
 import {
   DEFAULT_READING_MODE,
@@ -84,6 +85,7 @@ import {
   SELECT_TAGS,
   SELECT_TRACK,
   SELECT_TRACKS,
+  SELECT_PLAYBACK,
   SELECT_PLAYBACK_POSITION,
   SET_TRACK_DURATION,
   UPSERT_PLAYBACK_POSITION,
@@ -227,6 +229,26 @@ export async function loadTracks(db: SQLiteDatabase): Promise<Map<Id, Track>> {
 /** Saves a length the player found out, for songs whose file didn't say. */
 export async function setTrackDuration(db: SQLiteDatabase, itemId: Id, durationMs: number): Promise<void> {
   await db.runAsync(SET_TRACK_DURATION, [Math.round(durationMs), itemId]);
+}
+
+/** Where a song or video was stopped, how often it's been played and when a video was watched, for backups. */
+export async function loadPlayback(db: SQLiteDatabase, itemId: Id): Promise<BackupPlayback | null> {
+  const row = await db.getFirstAsync<{
+    position_ms: number;
+    updated_at: number;
+    play_count: number;
+    last_played_at: number | null;
+    finished_at: number | null;
+  }>(SELECT_PLAYBACK, [itemId]);
+  return row
+    ? {
+        positionMs: row.position_ms,
+        updatedAt: row.updated_at,
+        playCount: row.play_count,
+        lastPlayedAt: row.last_played_at,
+        finishedAt: row.finished_at,
+      }
+    : null;
 }
 
 /** Where a song was stopped, in ms, or null if it never was. */

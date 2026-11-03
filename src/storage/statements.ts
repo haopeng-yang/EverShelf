@@ -1,4 +1,4 @@
-import type { BackupBook } from '../models/backup';
+import type { BackupBook, BackupComic, BackupPlayback, BackupSong, BackupVideo } from '../models/backup';
 import type { ShelfAction } from '../models/shelfReducer';
 import { fileKindOfBook, inferShelfKind } from '../models/shelfKinds';
 import type {
@@ -20,6 +20,7 @@ import {
   DELETE_BOOKMARK,
   INSERT_BOOKMARK,
   INSERT_PAGE,
+  INSERT_PLAYBACK,
   INSERT_TRACK,
   INSERT_VIDEO,
   SET_CHAPTER_CHAR_COUNT,
@@ -296,14 +297,49 @@ export function restoreBookStatements(book: BackupBook, fileName: (position: num
     fileName: fileName(position),
     charCount: c.text.length,
   }));
-  const statements = replaceChapters(book.itemId, chapters);
-  const progress = book.progress;
-  if (progress) {
-    statements.push(saveProgressStatement({ ...progress, itemId: book.itemId }));
-    if (progress.finishedAt !== null) {
-      statements.push(...finishedStatements(book.itemId, true, progress.chapterId, progress.finishedAt));
-    }
-  }
+  const statements = [...replaceChapters(book.itemId, chapters), ...progressStatements(book.itemId, book.progress)];
   for (const bookmark of book.bookmarks) statements.push(insertBookmarkStatement({ ...bookmark, itemId: book.itemId }));
   return statements;
+}
+
+/** Saves one comic from a backup (its pages are written separately): chapters, pages, reading mode and position. */
+export function restoreComicStatements(comic: BackupComic): Statement[] {
+  const chapters: Chapter[] = comic.chapters.map((c, position) => ({
+    id: c.id,
+    itemId: comic.itemId,
+    position,
+    title: c.title,
+    fileName: c.fileName,
+    // A comic chapter's length is its number of pages.
+    charCount: comic.pages.filter((p) => p.chapterId === c.id).length,
+  }));
+  return [
+    ...saveComicStatements({ itemId: comic.itemId, kind: 'comic', readingMode: comic.readingMode }, chapters, comic.pages),
+    ...progressStatements(comic.itemId, comic.progress),
+  ];
+}
+
+/** Saves one song or video from a backup (its file is written separately), with where it was stopped. */
+export function restoreSongStatements(song: BackupSong): Statement[] {
+  const { playback, ...track } = song;
+  return [insertTrackStatement(track), ...playbackStatements(song.itemId, playback)];
+}
+
+export function restoreVideoStatements(video: BackupVideo): Statement[] {
+  const { playback, ...info } = video;
+  return [insertVideoStatement(info), ...playbackStatements(video.itemId, playback)];
+}
+
+function progressStatements(itemId: Id, progress: Omit<ReadingProgress, 'itemId'> | null): Statement[] {
+  if (!progress) return [];
+  return [
+    saveProgressStatement({ ...progress, itemId }),
+    ...(progress.finishedAt !== null ? finishedStatements(itemId, true, progress.chapterId, progress.finishedAt) : []),
+  ];
+}
+
+function playbackStatements(itemId: Id, playback: BackupPlayback | null): Statement[] {
+  if (!playback) return [];
+  const { positionMs, updatedAt, playCount, lastPlayedAt, finishedAt } = playback;
+  return [{ sql: INSERT_PLAYBACK, params: [itemId, positionMs, updatedAt, playCount, lastPlayedAt, finishedAt] }];
 }
