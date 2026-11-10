@@ -1,5 +1,5 @@
-import { createContext, useContext, type ReactNode } from 'react';
-import { StyleSheet, useColorScheme, type ImageStyle, type TextStyle, type ViewStyle } from 'react-native';
+import { createContext, useContext, useEffect, type ReactNode } from 'react';
+import { Appearance, StyleSheet, useColorScheme, type ImageStyle, type TextStyle, type ViewStyle } from 'react-native';
 
 import { useSettings } from '@/state/SettingsProvider';
 
@@ -74,6 +74,12 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
   const { settings } = useSettings();
   const systemScheme = useColorScheme();
   const dark = settings.themeMode === 'system' ? systemScheme === 'dark' : settings.themeMode === 'dark';
+  // Tell the native side too. Otherwise Android draws its own parts, such as
+  // the strip behind the status bar, in the phone's theme, so choosing Dark on
+  // a light phone left a white strip behind white status bar icons.
+  useEffect(() => {
+    Appearance.setColorScheme(settings.themeMode === 'system' ? 'unspecified' : settings.themeMode);
+  }, [settings.themeMode]);
   return (
     <ThemeContext.Provider value={dark ? darkTheme : lightTheme}>{children}</ThemeContext.Provider>
   );
