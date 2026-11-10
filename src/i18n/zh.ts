@@ -133,6 +133,7 @@ export const zh: Translations = {
   'settings.system': '跟随系统',
   'settings.light': '浅色',
   'settings.dark': '深色',
+  'settings.purple': '紫色',
   'settings.appearanceHint': '“跟随系统”会使用手机的浅色或深色模式。',
   'settings.language': '语言',
   'settings.languageHint': '“跟随系统”会使用手机的语言。',

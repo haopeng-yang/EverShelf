@@ -17,16 +17,17 @@ export function TextField({ style, multiline, ...props }: TextInputProps) {
   );
 }
 
-const useStyles = makeStyles((c) => ({
+const useStyles = makeStyles((c, look) => ({
   input: {
     borderWidth: 1,
     borderColor: c.border,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
+    borderRadius: look.pills ? radius.pill : radius.sm,
+    paddingHorizontal: look.pills ? spacing.lg : spacing.md,
     paddingVertical: spacing.sm,
     fontSize: fontSize.body,
     color: c.text,
-    backgroundColor: c.background,
+    backgroundColor: c.card,
   },
-  multiline: { minHeight: 64, textAlignVertical: 'top' },
+  // A pill shape doesn't suit a box of several lines.
+  multiline: { minHeight: 64, textAlignVertical: 'top', borderRadius: look.pills ? radius.md : radius.sm },
 }));

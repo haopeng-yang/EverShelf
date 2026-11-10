@@ -2,7 +2,7 @@ import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { useT } from '@/i18n/useT';
 import type { Id, Shelf } from '@/models/types';
-import { fontSize, makeStyles, radius, spacing } from '@/theme';
+import { fontSize, makeStyles, radius, raisedShadow, spacing } from '@/theme';
 
 interface ShelfTabsProps {
   shelves: Shelf[];
@@ -51,21 +51,27 @@ export function ShelfTabs({ shelves, selectedId, onSelect, onEditShelf, onAddShe
   );
 }
 
-const useStyles = makeStyles((c) => ({
+const useStyles = makeStyles((c, look) => ({
   // A ScrollView may shrink by default, so a long item list below squeezed this
   // row and clipped the tabs. flexShrink: 0 keeps it at its full height.
-  bar: { flexGrow: 0, flexShrink: 0, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border },
-  content: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  bar: {
+    flexGrow: 0,
+    flexShrink: 0,
+    borderBottomWidth: look.raised ? 0 : StyleSheet.hairlineWidth,
+    borderBottomColor: c.border,
+  },
+  // Room below the tabs for their shadows.
+  content: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, paddingBottom: look.raised ? spacing.lg : spacing.md },
   tab: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.lg,
+    borderRadius: look.pills ? radius.pill : radius.lg,
     backgroundColor: c.surface,
   },
-  tabSelected: { backgroundColor: c.tabSelected },
-  addTab: { backgroundColor: 'transparent', borderWidth: 1, borderColor: c.border, borderStyle: 'dashed' },
+  tabSelected: { backgroundColor: c.tabSelected, ...raisedShadow(c, look) },
+  addTab: { backgroundColor: 'transparent', borderWidth: 1, borderColor: look.raised ? c.primary : c.border, borderStyle: 'dashed' },
   pressed: { opacity: 0.6 },
-  label: { fontSize: fontSize.body, color: c.text },
-  labelSelected: { color: c.primary, fontWeight: '600' },
-  addLabel: { fontSize: fontSize.body, color: c.textMuted },
+  label: { fontSize: fontSize.body, color: look.raised ? c.textMuted : c.text },
+  labelSelected: { color: c.onTabSelected, fontWeight: '600' },
+  addLabel: { fontSize: fontSize.body, color: look.raised ? c.primary : c.textMuted },
 }));

@@ -152,7 +152,7 @@ export default function EditShelfScreen() {
         options={{
           title: shelf ? t('shelfEdit.editTitle') : t('shelfEdit.newTitle'),
           headerRight: () => (
-            <Button title={t('common.save')} variant="text" compact disabled={saving} onPress={save} />
+            <Button title={t('common.save')} variant="header" compact disabled={saving} onPress={save} />
           ),
         }}
       />

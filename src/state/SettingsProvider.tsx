@@ -5,7 +5,8 @@ import { SORT_ORDERS, type SortOrder } from '@/models/query';
 import { DEFAULT_READER_SETTINGS, parseReaderSettings, type ReaderSettings } from '@/models/readerSettings';
 import { loadSettings, saveSetting } from '@/storage/database';
 
-export type ThemeMode = 'system' | 'light' | 'dark';
+/** 'purple' is a light theme with purple accents and raised cards. */
+export type ThemeMode = 'system' | 'light' | 'dark' | 'purple';
 
 /** How a shelf shows its items: a grid of covers, or a list with small covers and details. */
 export type ViewMode = 'grid' | 'list';
@@ -80,7 +81,7 @@ export function useSettings(): SettingsContextValue {
 
 /** Ignores unknown or outdated stored values instead of trusting them. */
 function parseSettings(stored: Record<string, string>): Settings {
-  const themeModes: ThemeMode[] = ['system', 'light', 'dark'];
+  const themeModes: ThemeMode[] = ['system', 'light', 'dark', 'purple'];
   const viewModes: ViewMode[] = ['grid', 'list'];
   const languages: LanguageSetting[] = ['system', 'en', 'zh'];
   return {

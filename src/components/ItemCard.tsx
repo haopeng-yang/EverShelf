@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 
 import type { BookSummary, Item } from '@/models/types';
-import { fontSize, makeStyles, spacing } from '@/theme';
+import { fontSize, makeStyles, radius, raisedShadow, spacing } from '@/theme';
 
 import { Cover } from './Cover';
 import { MisplacedMark } from './MisplacedMark';
@@ -31,7 +31,7 @@ export function ItemCard({ item, width, book, selected, misplaced, onPress, onLo
       accessibilityLabel={item.title}
       onPress={onPress}
       onLongPress={onLongPress}
-      style={({ pressed }) => [{ width }, pressed && styles.pressed]}>
+      style={({ pressed }) => [styles.card, { width }, pressed && styles.pressed]}>
       <View>
         <Cover uri={item.coverUri} title={item.title} />
         <ProgressBadge book={book} />
@@ -45,7 +45,16 @@ export function ItemCard({ item, width, book, selected, misplaced, onPress, onLo
   );
 }
 
-const useStyles = makeStyles((c) => ({
+// The raised look puts the cover and title on a white card; `width` still covers the whole card.
+const useStyles = makeStyles((c, look) => ({
+  card: look.raised ? { padding: spacing.xs, borderRadius: radius.md, backgroundColor: c.card, ...raisedShadow(c, look) } : {},
   pressed: { opacity: 0.7 },
-  title: { marginTop: spacing.xs, fontSize: fontSize.small, color: c.text, fontWeight: '500' },
+  title: {
+    marginTop: spacing.xs,
+    marginHorizontal: look.raised ? spacing.xs : 0,
+    marginBottom: look.raised ? spacing.xs : 0,
+    fontSize: fontSize.small,
+    color: c.text,
+    fontWeight: look.raised ? '600' : '500',
+  },
 }));

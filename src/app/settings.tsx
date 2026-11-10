@@ -25,7 +25,7 @@ import {
 } from '@/storage/backupFlow';
 import { pruneBooks } from '@/storage/bookFiles';
 import { pruneCovers } from '@/storage/covers';
-import { fontSize, makeStyles, radius, spacing } from '@/theme';
+import { fontSize, makeStyles, radius, raisedShadow, spacing } from '@/theme';
 
 export default function SettingsScreen() {
   const { settings, setSetting } = useSettings();
@@ -55,6 +55,7 @@ export default function SettingsScreen() {
     { value: 'system', label: t('settings.system') },
     { value: 'light', label: t('settings.light') },
     { value: 'dark', label: t('settings.dark') },
+    { value: 'purple', label: t('settings.purple') },
   ];
   // Language names are always written in their own language, so they can be found either way.
   const languageOptions: { value: LanguageSetting; label: string }[] = [
@@ -298,16 +299,22 @@ function errorText(error: unknown, t: Translate): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-const useStyles = makeStyles((c) => ({
+const useStyles = makeStyles((c, look) => ({
   content: { padding: spacing.lg, gap: spacing.xl },
   section: { gap: spacing.sm },
-  label: { fontSize: fontSize.small, color: c.textMuted, fontWeight: '600' },
+  label: { fontSize: fontSize.small, color: look.raised ? c.primary : c.textMuted, fontWeight: '600' },
   hint: { fontSize: fontSize.small, color: c.textMuted },
-  segmented: { flexDirection: 'row', backgroundColor: c.surface, borderRadius: radius.md, padding: spacing.xs },
-  segment: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: radius.sm },
-  segmentSelected: { backgroundColor: c.background },
+  segmented: {
+    flexDirection: 'row',
+    backgroundColor: c.surface,
+    borderRadius: look.pills ? radius.pill : radius.md,
+    padding: spacing.xs,
+    ...raisedShadow(c, look),
+  },
+  segment: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: look.pills ? radius.pill : radius.sm },
+  segmentSelected: { backgroundColor: look.raised ? c.tabSelected : c.background },
   segmentLabel: { fontSize: fontSize.body, color: c.textMuted },
-  segmentLabelSelected: { color: c.text, fontWeight: '600' },
+  segmentLabelSelected: { color: look.raised ? c.onTabSelected : c.text, fontWeight: '600' },
   footer: { fontSize: fontSize.small, color: c.textMuted, textAlign: 'center' },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   switchText: { flex: 1, gap: 2 },

@@ -4,7 +4,7 @@ import { useT } from '@/i18n/useT';
 import { durationLabel } from '@/models/queue';
 import type { Item, VideoSummary } from '@/models/types';
 import { watchedFraction } from '@/models/videos';
-import { fontSize, makeStyles, radius, spacing } from '@/theme';
+import { fontSize, makeStyles, radius, raisedShadow, spacing } from '@/theme';
 
 import { Cover } from '../Cover';
 import { MisplacedMark } from '../MisplacedMark';
@@ -69,7 +69,7 @@ export function VideoCard({ item, video, selected, misplaced, width, row, onPres
       accessibilityLabel={[length ? t('video.label', { title: item.title, length }) : item.title, status].filter(Boolean).join(', ')}
       onPress={onPress}
       onLongPress={onLongPress}
-      style={({ pressed }) => [row ? styles.row : { width }, pressed && styles.pressed]}>
+      style={({ pressed }) => [row ? styles.row : [styles.card, { width }], pressed && styles.pressed]}>
       <View style={row ? styles.rowThumb : undefined}>
         <VideoThumb item={item} video={video} selected={selected} misplaced={misplaced} showLength={!row} />
       </View>
@@ -87,8 +87,12 @@ export function VideoCard({ item, video, selected, misplaced, width, row, onPres
   );
 }
 
-const useStyles = makeStyles((c) => ({
+const useStyles = makeStyles((c, look) => ({
   frame: { aspectRatio: VIDEO_ASPECT_RATIO },
+  // The raised look puts each video on a white card, like the other shelves.
+  card: look.raised
+    ? { padding: spacing.xs, paddingBottom: spacing.sm, borderRadius: radius.md, backgroundColor: c.card, ...raisedShadow(c, look) }
+    : {},
   badge: {
     position: 'absolute',
     paddingHorizontal: spacing.xs,
@@ -110,7 +114,12 @@ const useStyles = makeStyles((c) => ({
     backgroundColor: 'rgba(255,255,255,0.35)',
   },
   bar: { height: 3, backgroundColor: c.primary },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    ...(look.raised && { padding: spacing.sm, borderRadius: radius.lg, backgroundColor: c.card, ...raisedShadow(c, look) }),
+  },
   rowThumb: { width: 128 },
   rowText: { flex: 1, minWidth: 0 },
   pressed: { opacity: 0.7 },

@@ -1,8 +1,9 @@
 import { Pressable, Text, type StyleProp, type ViewStyle } from 'react-native';
 
-import { fontSize, makeStyles, radius, spacing } from '@/theme';
+import { fontSize, makeStyles, radius, raisedShadow, spacing } from '@/theme';
 
-type Variant = 'primary' | 'secondary' | 'danger' | 'text';
+/** 'header' is a text button for the bar at the top of a screen, coloured to show on it. */
+type Variant = 'primary' | 'secondary' | 'danger' | 'text' | 'header';
 
 interface ButtonProps {
   title: string;
@@ -45,24 +46,26 @@ export function Button({
   );
 }
 
-const useStyles = makeStyles((c) => ({
+const useStyles = makeStyles((c, look) => ({
   base: {
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
+    paddingHorizontal: look.pills ? spacing.xl : spacing.lg,
+    borderRadius: look.pills ? radius.pill : radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  compact: { paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
+  compact: { paddingVertical: spacing.xs, paddingHorizontal: look.pills ? spacing.md : spacing.sm },
   pressed: { opacity: 0.6 },
   disabled: { opacity: 0.4 },
   label: { fontSize: fontSize.body, fontWeight: '600' },
-  primary: { backgroundColor: c.primary },
-  secondary: { backgroundColor: c.surface },
-  danger: { backgroundColor: c.surface },
+  primary: { backgroundColor: c.primary, ...raisedShadow(c, look) },
+  secondary: { backgroundColor: c.surface, ...raisedShadow(c, look) },
+  danger: { backgroundColor: c.surface, ...raisedShadow(c, look) },
   text: { backgroundColor: 'transparent' },
+  header: { backgroundColor: 'transparent' },
   primaryLabel: { color: c.onPrimary },
   secondaryLabel: { color: c.text },
   dangerLabel: { color: c.danger },
   textLabel: { color: c.primary },
+  headerLabel: { color: c.headerTint },
 }));

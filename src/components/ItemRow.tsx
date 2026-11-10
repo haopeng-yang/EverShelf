@@ -2,7 +2,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { useT } from '@/i18n/useT';
 import type { BookSummary, Item } from '@/models/types';
-import { fontSize, makeStyles, spacing } from '@/theme';
+import { fontSize, makeStyles, radius, raisedShadow, spacing } from '@/theme';
 
 import { Cover } from './Cover';
 import { MisplacedMark } from './MisplacedMark';
@@ -61,8 +61,13 @@ export function ItemRow({ item, book, selected, misplaced, onPress, onLongPress 
   );
 }
 
-const useStyles = makeStyles((c) => ({
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+const useStyles = makeStyles((c, look) => ({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    ...(look.raised && { padding: spacing.md, borderRadius: radius.lg, backgroundColor: c.card, ...raisedShadow(c, look) }),
+  },
   pressed: { opacity: 0.7 },
   cover: { width: 64 },
   text: { flex: 1, gap: spacing.xs },

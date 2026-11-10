@@ -195,9 +195,9 @@ export default function ShelvesScreen() {
             selecting ? null : (
               <View style={styles.headerButtons}>
                 {shelf && (
-                  <Button title={t('home.editShelf')} variant="text" compact onPress={() => editShelf(shelf.id)} />
+                  <Button title={t('home.editShelf')} variant="header" compact onPress={() => editShelf(shelf.id)} />
                 )}
-                <Button title={t('home.settings')} variant="text" compact onPress={() => router.push('/settings')} />
+                <Button title={t('home.settings')} variant="header" compact onPress={() => router.push('/settings')} />
               </View>
             ),
         }}

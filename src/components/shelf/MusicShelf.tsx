@@ -9,7 +9,7 @@ import { artistOf, durationLabel } from '@/models/queue';
 import type { Id, Item, Track } from '@/models/types';
 import { queueEntries, usePlayer } from '@/state/PlayerProvider';
 import { loadTracks } from '@/storage/database';
-import { fontSize, makeStyles, radius, spacing } from '@/theme';
+import { fontSize, makeStyles, radius, raisedShadow, spacing } from '@/theme';
 
 import { Button } from '../Button';
 import { Cover } from '../Cover';
@@ -132,11 +132,17 @@ export function MusicShelf({
   );
 }
 
-const useStyles = makeStyles((c) => ({
-  list: { padding: spacing.lg, gap: spacing.sm },
+const useStyles = makeStyles((c, look) => ({
+  list: { padding: spacing.lg, gap: look.raised ? spacing.md : spacing.sm },
   playRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
   playButton: { flex: 1 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xs },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.xs,
+    ...(look.raised && { padding: spacing.sm, paddingRight: spacing.md, borderRadius: radius.lg, backgroundColor: c.card, ...raisedShadow(c, look) }),
+  },
   pressed: { opacity: 0.7 },
   cover: { width: 52, borderRadius: radius.sm },
   square: { aspectRatio: 1 },

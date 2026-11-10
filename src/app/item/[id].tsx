@@ -17,7 +17,7 @@ import { resumePosition } from '@/models/videos';
 import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfState } from '@/state/ShelfProvider';
 import { loadChapters, loadProgress, loadVideoSummaries, setVideoFinished } from '@/storage/database';
-import { fontSize, makeStyles, spacing } from '@/theme';
+import { fontSize, makeStyles, radius, raisedShadow, spacing } from '@/theme';
 
 /** Wider than this, the cover sits beside the details (as in the sketch); narrower, above them. */
 const SIDE_BY_SIDE_MIN_WIDTH = 600;
@@ -175,17 +175,21 @@ function Field({ name, value, images = [] }: { name: string; value: string; imag
   );
 }
 
-const useStyles = makeStyles((c) => ({
+const useStyles = makeStyles((c, look) => ({
   content: { padding: spacing.xl, gap: spacing.xl },
   row: { flexDirection: 'row', gap: spacing.xl, alignItems: 'flex-start' },
   column: { gap: spacing.xl },
   coverSide: { width: 200 },
   coverTop: { alignSelf: 'center' },
   alignStart: { alignSelf: 'flex-start' },
-  fields: { gap: spacing.lg },
+  // The raised look gathers the details on one white card, as on the design's task page.
+  fields: {
+    gap: spacing.lg,
+    ...(look.raised && { padding: spacing.lg, borderRadius: radius.lg, backgroundColor: c.card, ...raisedShadow(c, look) }),
+  },
   fieldsSide: { flex: 1 },
   field: { gap: spacing.xs },
-  fieldName: { fontSize: fontSize.small, color: c.textMuted, fontWeight: '600' },
+  fieldName: { fontSize: fontSize.small, color: look.raised ? c.primary : c.textMuted, fontWeight: '600' },
   fieldValue: { fontSize: fontSize.body, color: c.text, lineHeight: 22 },
   fieldEmpty: { color: c.textMuted },
   chapters: { fontSize: fontSize.small, color: c.textMuted },

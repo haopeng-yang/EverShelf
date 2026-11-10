@@ -146,6 +146,7 @@ export const en = {
   'settings.system': 'System',
   'settings.light': 'Light',
   'settings.dark': 'Dark',
+  'settings.purple': 'Purple',
   'settings.appearanceHint': '“System” follows your phone’s light or dark mode.',
   'settings.language': 'Language',
   'settings.languageHint': '“System” follows your phone’s language.',

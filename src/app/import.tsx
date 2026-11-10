@@ -270,7 +270,7 @@ export default function ImportScreen() {
         options={{
           title: t('import.title', { shelf: shelf.name }),
           headerRight: () => (
-            <Button title={t('common.save')} variant="text" compact disabled={!file || saving} onPress={save} />
+            <Button title={t('common.save')} variant="header" compact disabled={!file || saving} onPress={save} />
           ),
         }}
       />

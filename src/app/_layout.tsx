@@ -36,21 +36,22 @@ export default function RootLayout() {
 }
 
 function ThemedStack() {
-  const { colors, dark } = useTheme();
+  const { colors, dark, look, statusBar } = useTheme();
   // The mini player sits under the screens rather than over them, so it never hides their buttons.
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.primary,
-          headerTitleStyle: { color: colors.text },
-          headerShadowVisible: !dark,
+          headerStyle: { backgroundColor: colors.header },
+          headerTintColor: colors.headerTint,
+          headerTitleStyle: { color: colors.onHeader, fontWeight: look.raised ? '700' : undefined },
+          // A coloured header stands out on its own; a white one needs the line under it.
+          headerShadowVisible: !dark && !look.raised,
           contentStyle: { backgroundColor: colors.background },
         }}
       />
       <MiniPlayer />
-      <StatusBar style={dark ? 'light' : 'dark'} />
+      <StatusBar style={statusBar} />
     </View>
   );
 }

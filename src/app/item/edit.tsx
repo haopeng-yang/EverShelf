@@ -22,7 +22,7 @@ import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
 import { deleteBookFiles } from '@/storage/bookFiles';
 import { deleteCover, saveCover } from '@/storage/covers';
-import { fontSize, makeStyles, radius, spacing } from '@/theme';
+import { fontSize, makeStyles, radius, raisedShadow, spacing } from '@/theme';
 
 /**
  * Add or edit an item. Open with `id` to edit an existing item, or with
@@ -160,7 +160,7 @@ export default function EditItemScreen() {
         options={{
           title: original ? t('itemEdit.editTitle') : t('itemEdit.newTitle', { shelf: shelf.name }),
           headerRight: () => (
-            <Button title={t('common.save')} variant="text" compact disabled={saving} onPress={save} />
+            <Button title={t('common.save')} variant="header" compact disabled={saving} onPress={save} />
           ),
         }}
       />
@@ -256,19 +256,20 @@ export default function EditItemScreen() {
   );
 }
 
-const useStyles = makeStyles((c) => ({
+const useStyles = makeStyles((c, look) => ({
   content: { padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.xl * 2 },
   coverRow: { flexDirection: 'row', gap: spacing.lg, alignItems: 'center' },
   cover: { width: 120 },
   coverButtons: { flex: 1, gap: spacing.sm },
   section: { gap: spacing.sm },
-  label: { fontSize: fontSize.small, color: c.textMuted, fontWeight: '600' },
+  label: { fontSize: fontSize.small, color: look.raised ? c.primary : c.textMuted, fontWeight: '600' },
   hint: { fontSize: fontSize.small, color: c.textMuted },
   tag: {
     gap: spacing.sm,
     padding: spacing.md,
-    borderRadius: radius.md,
+    borderRadius: look.raised ? radius.lg : radius.md,
     backgroundColor: c.surface,
+    ...raisedShadow(c, look),
   },
   tagHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   tagName: { flex: 1, fontWeight: '600' },
