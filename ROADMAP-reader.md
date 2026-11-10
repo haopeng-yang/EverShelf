@@ -2,7 +2,7 @@
 
 EverShelf becomes a shelf **and** a reader. Users import novel files they already have (TXT, EPUB, and later more formats), and EverShelf turns them into books with chapters, a comfortable reader and saved progress.
 
-**Scope and copyright:** EverShelf does not search, scrape or download from any website. It only opens files the user picks on their own device, the same way any e-book reader does. The user is responsible for where their files come from. Say this in the app's About screen and in any store listing.
+Update: The shelf feature is completed, next goal is to add aggregator function to Evershelf, as per user feedback.
 
 ---
 
