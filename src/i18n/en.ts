@@ -35,8 +35,8 @@ export const en = {
   'defaults.videos': 'Videos',
 
   // Shelf screen
-  'home.editShelf': 'Edit shelf',
   'home.settings': 'Settings',
+  'home.import': 'Import',
   'home.noShelves': 'You have no shelves yet.',
   'home.addShelf': 'Add a shelf',
   'home.search': 'Search {shelf}',

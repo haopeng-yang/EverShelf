@@ -1,4 +1,3 @@
-import * as SystemUI from 'expo-system-ui';
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { Appearance, StyleSheet, useColorScheme, type ImageStyle, type TextStyle, type ViewStyle } from 'react-native';
 
@@ -149,18 +148,11 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
   const mode = settings.themeMode;
   const theme =
     mode === 'purple' ? purpleTheme : mode === 'dark' || (mode === 'system' && systemScheme === 'dark') ? darkTheme : lightTheme;
-  // Tell the native side too. Otherwise Android draws its own parts in the
-  // phone's theme: its window background, which shows behind the status bar,
-  // stayed white when Dark was chosen on a light phone, under white icons.
+  // Tell the native side too, so Android's own parts (dialogs, the keyboard)
+  // match. The strip behind the status bar is set per screen, in _layout.tsx.
   useEffect(() => {
     Appearance.setColorScheme(mode === 'system' ? 'unspecified' : mode === 'dark' ? 'dark' : 'light');
   }, [mode]);
-  const behindStatusBar = theme.colors.header;
-  useEffect(() => {
-    SystemUI.setBackgroundColorAsync(behindStatusBar).catch((error: unknown) =>
-      console.warn('Could not set the window background', error),
-    );
-  }, [behindStatusBar]);
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 }
 

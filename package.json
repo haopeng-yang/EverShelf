@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
     "@zxing/text-encoding": "^0.9.0",
     "expo": "~58.0.20",
     "expo-asset": "~58.0.19",

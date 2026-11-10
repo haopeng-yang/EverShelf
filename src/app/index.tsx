@@ -25,7 +25,7 @@ import { useShelfLocks } from '@/state/ShelfLockProvider';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
 import { loadBookSummaries, loadFileKinds } from '@/storage/database';
 import { deleteItemFiles } from '@/storage/shelfFiles';
-import { fontSize, makeStyles, radius, spacing } from '@/theme';
+import { fontSize, makeStyles, radius, raisedShadow, spacing } from '@/theme';
 
 /** How each kind of shelf looks when it's opened. */
 const LAYOUTS: Record<ShelfKind, (props: ShelfLayoutProps) => ReactElement> = {
@@ -148,6 +148,8 @@ export default function ShelvesScreen() {
     styles.selectionButton,
     { width: (width - spacing.lg * 2 - spacing.sm * (barButtons - 1)) / barButtons },
   ];
+  // The bottom bar's three buttons share its width the same way.
+  const bottomButtonStyle = [styles.selectionButton, { width: (width - spacing.lg * 2 - spacing.sm * 2) / 3 }];
 
   async function deleteSelected() {
     const picked = selectedItems;
@@ -188,28 +190,18 @@ export default function ShelvesScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen
-        options={{
-          title: selecting ? t('select.count', { count: selectedItems.length }) : 'EverShelf',
-          headerRight: () =>
-            selecting ? null : (
-              <View style={styles.headerButtons}>
-                {shelf && (
-                  <Button title={t('home.editShelf')} variant="header" compact onPress={() => editShelf(shelf.id)} />
-                )}
-                <Button title={t('home.settings')} variant="header" compact onPress={() => router.push('/settings')} />
-              </View>
-            ),
-        }}
-      />
+      {/* No title bar: the shelf tabs sit at the top, and long pressing one edits that shelf. */}
+      <Stack.Screen options={{ headerShown: false, title: 'EverShelf' }} />
 
-      <ShelfTabs
-        shelves={state.shelves}
-        selectedId={shelf?.id}
-        onSelect={setSelectedId}
-        onEditShelf={editShelf}
-        onAddShelf={() => router.push('/shelf/edit')}
-      />
+      <View style={{ paddingTop: insets.top }}>
+        <ShelfTabs
+          shelves={state.shelves}
+          selectedId={shelf?.id}
+          onSelect={setSelectedId}
+          onEditShelf={editShelf}
+          onAddShelf={() => router.push('/shelf/edit')}
+        />
+      </View>
 
       {!shelf ? (
         <View style={styles.empty}>
@@ -292,8 +284,10 @@ export default function ShelvesScreen() {
             onToggleSelected={toggleSelected}
             openDetails={openDetails}
           />
-          {selecting ? (
+          {selecting && (
             <View style={[styles.selectionBar, { paddingBottom: insets.bottom + spacing.md }]}>
+              <Text style={styles.selectionCount}>{t('select.count', { count: selectedItems.length })}</Text>
+              <View style={styles.selectionButtons}>
               <Button
                 title={t('common.delete')}
                 variant="danger"
@@ -311,28 +305,38 @@ export default function ShelvesScreen() {
                 <Button title={t('select.details')} style={selectionButtonStyle} onPress={() => openDetails(detailsItem)} />
               )}
               <Button title={t('common.cancel')} style={selectionButtonStyle} onPress={clearSelection} />
-            </View>
-          ) : (
-            <View style={[styles.fabRow, { bottom: insets.bottom + spacing.lg }]}>
-              {/* Book files are stored on the device, which the web version can't do. Collections have nothing to import. */}
-              {Platform.OS !== 'web' && shelf.kind !== 'collection' && (
-                <Button
-                  title={t(`home.import.${shelf.kind}`)}
-                  accessibilityLabel={t(`home.importTo.${shelf.kind}`, { shelf: shelf.name })}
-                  style={styles.fab}
-                  onPress={() => router.push({ pathname: '/import', params: { shelfId: shelf.id } })}
-                />
-              )}
-              <Button
-                title={t('home.addItem')}
-                variant="primary"
-                accessibilityLabel={t('home.addItemTo', { shelf: shelf.name })}
-                style={styles.fab}
-                onPress={() => router.push({ pathname: '/item/edit', params: { shelfId: shelf.id } })}
-              />
+              </View>
             </View>
           )}
         </>
+      )}
+
+      {/* Always there, even with no shelves or a locked one, so Settings can be reached. Selection mode has its own bar. */}
+      {!selecting && (
+        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.sm }]}>
+          {/* Book files are stored on the device, which the web version can't do. Collections have nothing to import. */}
+          {shelf && Platform.OS !== 'web' && shelf.kind !== 'collection' ? (
+            <Button
+              title={t(`home.import.${shelf.kind}`)}
+              icon="download"
+              accessibilityLabel={t(`home.importTo.${shelf.kind}`, { shelf: shelf.name })}
+              disabled={isLocked(shelf)}
+              style={bottomButtonStyle}
+              onPress={() => router.push({ pathname: '/import', params: { shelfId: shelf.id } })}
+            />
+          ) : (
+            <Button title={t('home.import')} icon="download" disabled style={bottomButtonStyle} onPress={() => {}} />
+          )}
+          <Button
+            title={t('home.addItem')}
+            variant="primary"
+            accessibilityLabel={shelf ? t('home.addItemTo', { shelf: shelf.name }) : undefined}
+            disabled={!shelf || isLocked(shelf)}
+            style={bottomButtonStyle}
+            onPress={() => shelf && router.push({ pathname: '/item/edit', params: { shelfId: shelf.id } })}
+          />
+          <Button title={t('home.settings')} icon="settings" style={bottomButtonStyle} onPress={() => router.push('/settings')} />
+        </View>
       )}
 
       {shelf && (
@@ -361,9 +365,8 @@ export default function ShelvesScreen() {
   );
 }
 
-const useStyles = makeStyles((c) => ({
+const useStyles = makeStyles((c, look) => ({
   container: { flex: 1, backgroundColor: c.background },
-  headerButtons: { flexDirection: 'row', gap: spacing.xs },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   search: { flex: 1, minWidth: 0 },
   toolbarButton: { paddingVertical: spacing.sm },
@@ -381,23 +384,26 @@ const useStyles = makeStyles((c) => ({
     backgroundColor: c.surface,
   },
   bannerText: { flex: 1, fontSize: fontSize.small, color: c.text },
-  fabRow: { position: 'absolute', right: spacing.lg, flexDirection: 'row', gap: spacing.sm },
   selectionBar: {
-    flexDirection: 'row',
     gap: spacing.sm,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
     paddingHorizontal: spacing.lg,
     borderTopWidth: 1,
     borderTopColor: c.border,
     backgroundColor: c.background,
   },
+  selectionCount: { fontSize: fontSize.small, color: c.textMuted, fontWeight: '600', textAlign: 'center' },
+  selectionButtons: { flexDirection: 'row', gap: spacing.sm },
   selectionButton: { paddingHorizontal: spacing.xs },
-  fab: {
-    borderRadius: 28,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
+  // The raised look floats the bar on a white card with rounded top corners.
+  bottomBar: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: look.raised ? c.card : c.background,
+    ...(look.raised
+      ? { borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, ...raisedShadow(c, look) }
+      : { borderTopWidth: 1, borderTopColor: c.border }),
   },
 }));

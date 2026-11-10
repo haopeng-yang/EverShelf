@@ -1,6 +1,5 @@
 import type { ReactElement } from 'react';
 import { FlatList, Text, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { BookSummary, Id, Item, Shelf } from '@/models/types';
 import { useSettings } from '@/state/SettingsProvider';
@@ -53,7 +52,6 @@ export function ItemGrid({
 }: ItemGridProps) {
   const styles = useStyles();
   const { settings } = useSettings();
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const listView = settings.viewMode === 'list';
   const columns = listView ? 1 : Math.max(2, Math.floor((width - spacing.lg * 2) / MIN_CARD_WIDTH));
@@ -69,7 +67,7 @@ export function ItemGrid({
       keyExtractor={(item) => item.id}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
-      contentContainerStyle={[styles.grid, { paddingBottom: insets.bottom + 96 }]}
+      contentContainerStyle={[styles.grid, { paddingBottom: spacing.xl }]}
       columnWrapperStyle={columns > 1 ? styles.row : undefined}
       ListEmptyComponent={<Text style={styles.emptyText}>{emptyText}</Text>}
       ListHeaderComponent={header}

@@ -2,7 +2,6 @@ import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useT } from '@/i18n/useT';
 import { selectItemsOnShelf } from '@/models/shelfReducer';
@@ -38,7 +37,6 @@ export function VideoShelf({
 }: ShelfLayoutProps) {
   const t = useT();
   const styles = useStyles();
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { settings } = useSettings();
   const state = useShelfState();
@@ -80,7 +78,7 @@ export function VideoShelf({
       keyExtractor={(item) => item.id}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
-      contentContainerStyle={[styles.grid, { paddingBottom: insets.bottom + 96 }]}
+      contentContainerStyle={[styles.grid, { paddingBottom: spacing.xl }]}
       columnWrapperStyle={columns > 1 ? styles.row : undefined}
       ListHeaderComponent={
         <>

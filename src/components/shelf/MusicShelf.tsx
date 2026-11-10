@@ -2,7 +2,6 @@ import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useT } from '@/i18n/useT';
 import { artistOf, durationLabel } from '@/models/queue';
@@ -35,7 +34,6 @@ export function MusicShelf({
 }: ShelfLayoutProps) {
   const t = useT();
   const styles = useStyles();
-  const insets = useSafeAreaInsets();
   const db = useSQLiteContext();
   const player = usePlayer();
   const playingId = player.queue[player.current]?.itemId;
@@ -70,7 +68,7 @@ export function MusicShelf({
       keyExtractor={(item) => item.id}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
-      contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 96 }]}
+      contentContainerStyle={[styles.list, { paddingBottom: spacing.xl }]}
       ListHeaderComponent={
         <>
           {banner}

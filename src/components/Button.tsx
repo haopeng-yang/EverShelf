@@ -1,6 +1,11 @@
-import { Pressable, Text, type StyleProp, type ViewStyle } from 'react-native';
+import Feather from '@expo/vector-icons/Feather';
+import type { ComponentProps } from 'react';
+import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { fontSize, makeStyles, radius, raisedShadow, spacing } from '@/theme';
+
+/** A Feather icon's name, e.g. 'download' or 'settings'. All are listed at https://feathericons.com */
+export type IconName = ComponentProps<typeof Feather>['name'];
 
 /** 'header' is a text button for the bar at the top of a screen, coloured to show on it. */
 type Variant = 'primary' | 'secondary' | 'danger' | 'text' | 'header';
@@ -13,6 +18,8 @@ interface ButtonProps {
   /** Smaller padding, for buttons inside rows. */
   compact?: boolean;
   accessibilityLabel?: string;
+  /** An icon shown before the label, in the label's colour. */
+  icon?: IconName;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -23,9 +30,12 @@ export function Button({
   disabled,
   compact,
   accessibilityLabel,
+  icon,
   style,
 }: ButtonProps) {
   const styles = useStyles();
+  const variantLabel = styles[`${variant}Label`];
+  const labelStyle = [styles.label, variantLabel];
   return (
     <Pressable
       accessibilityRole="button"
@@ -41,7 +51,15 @@ export function Button({
         disabled && styles.disabled,
         style,
       ]}>
-      <Text style={[styles.label, styles[`${variant}Label`]]}>{title}</Text>
+      {icon ? (
+        <View style={styles.withIcon}>
+          <Feather name={icon} size={20} color={variantLabel.color} />
+          {/* flexShrink lets a long label wrap beside the icon instead of pushing out of the button. */}
+          <Text style={[labelStyle, styles.shrink]}>{title}</Text>
+        </View>
+      ) : (
+        <Text style={labelStyle}>{title}</Text>
+      )}
     </Pressable>
   );
 }
@@ -58,6 +76,8 @@ const useStyles = makeStyles((c, look) => ({
   pressed: { opacity: 0.6 },
   disabled: { opacity: 0.4 },
   label: { fontSize: fontSize.body, fontWeight: '600' },
+  withIcon: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  shrink: { flexShrink: 1 },
   primary: { backgroundColor: c.primary, ...raisedShadow(c, look) },
   secondary: { backgroundColor: c.surface, ...raisedShadow(c, look) },
   danger: { backgroundColor: c.surface, ...raisedShadow(c, look) },

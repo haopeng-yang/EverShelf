@@ -36,8 +36,8 @@ export const zh: Translations = {
   'defaults.music': '音乐',
   'defaults.videos': '视频',
 
-  'home.editShelf': '编辑书架',
   'home.settings': '设置',
+  'home.import': '导入',
   'home.noShelves': '你还没有书架。',
   'home.addShelf': '添加书架',
   'home.search': '搜索{shelf}',
