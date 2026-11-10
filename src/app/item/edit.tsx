@@ -53,10 +53,9 @@ export default function EditItemScreen() {
   const addTag = () => setDraft((d) => d && { ...d, tags: [...d.tags, { id: newId(), name: '', value: '' }] });
 
   async function pickCover(source: 'library' | 'camera') {
+    // No forced crop: the whole image is kept, and Cover fills its 2:3 frame from the centre.
     const options: ImagePicker.ImagePickerOptions = {
       mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [2, 3],
       quality: 0.8,
     };
     let result: ImagePicker.ImagePickerResult;
