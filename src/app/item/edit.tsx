@@ -9,11 +9,13 @@ import { Cover } from '@/components/Cover';
 import { confirm, showMessage } from '@/components/dialogs';
 import { LockedScreen } from '@/components/LockedShelf';
 import { NotFound } from '@/components/NotFound';
+import { TagImages } from '@/components/TagImages';
 import { TextField } from '@/components/TextField';
 import { useT } from '@/i18n/useT';
 import { newItemDraft } from '@/models/actions';
 import { tagValuePlaceholder } from '@/models/defaults';
 import { newId } from '@/models/ids';
+import { itemImageUris, tagImageUris } from '@/models/images';
 import { moveInArray } from '@/models/shelfReducer';
 import type { Id, Item, Tag } from '@/models/types';
 import { useShelfLocks } from '@/state/ShelfLockProvider';
@@ -51,6 +53,31 @@ export default function EditItemScreen() {
   const moveTag = (index: number, delta: number) =>
     setDraft((d) => d && { ...d, tags: moveInArray(d.tags, index, index + delta) });
   const addTag = () => setDraft((d) => d && { ...d, tags: [...d.tags, { id: newId(), name: '', value: '' }] });
+  const setTagImages = (tagId: Id, change: (images: string[]) => string[]) =>
+    setDraft(
+      (d) =>
+        d && {
+          ...d,
+          tags: d.tags.map((tag) => {
+            if (tag.id !== tagId) return tag;
+            const { images: old, ...rest } = tag;
+            const images = change(old ?? []);
+            return images.length > 0 ? { ...rest, images } : rest;
+          }),
+        },
+    );
+
+  async function addTagImages(tagId: Id) {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      orderedSelection: true,
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+    const uris = result.assets.map((asset) => asset.uri);
+    if (uris.length > 0) setTagImages(tagId, (images) => [...images, ...uris]);
+  }
 
   async function pickCover(source: 'library' | 'camera') {
     // No forced crop: the whole image is kept, and Cover fills its 2:3 frame from the centre.
@@ -85,15 +112,23 @@ export default function EditItemScreen() {
       // The picked image is only copied into app storage now, so cancelled edits leave no files behind.
       const coverUri =
         draft.coverUri && draft.coverUri !== original?.coverUri ? await saveCover(draft.coverUri) : draft.coverUri;
-      const tags = draft.tags
-        .filter((tag) => tag.name.trim())
-        .map((tag) => ({ ...tag, name: tag.name.trim(), value: tag.value.trim() }));
+      // Newly picked tag images are copied the same way; ones already saved are kept as they are.
+      const savedImages = new Set(original ? tagImageUris(original) : []);
+      const tags: Tag[] = [];
+      for (const tag of draft.tags) {
+        if (!tag.name.trim()) continue;
+        const images: string[] = [];
+        for (const uri of tag.images ?? []) images.push(savedImages.has(uri) ? uri : await saveCover(uri));
+        tags.push({ ...tag, name: tag.name.trim(), value: tag.value.trim(), ...(images.length > 0 ? { images } : {}) });
+      }
       const item: Item = { ...draft, title, coverUri, tags };
       const now = Date.now();
 
       if (original) {
         dispatch({ type: 'item/save', item, now });
         if (original.coverUri !== coverUri) deleteCover(original.coverUri);
+        const kept = new Set(tagImageUris(item));
+        for (const uri of savedImages) if (!kept.has(uri)) deleteCover(uri);
       } else {
         dispatch({ type: 'item/add', item: { ...item, createdAt: now, updatedAt: now } });
       }
@@ -114,7 +149,7 @@ export default function EditItemScreen() {
     );
     if (!ok) return;
     dispatch({ type: 'item/remove', itemId: original.id });
-    deleteCover(original.coverUri);
+    for (const uri of itemImageUris(original)) deleteCover(uri);
     deleteBookFiles(original.id);
     router.dismissTo('/');
   }
@@ -196,6 +231,19 @@ export default function EditItemScreen() {
                 placeholder={tagValuePlaceholder(tag.name, t)}
                 multiline
               />
+              <TagImages
+                images={tag.images ?? []}
+                name={name}
+                onRemove={(i) => setTagImages(tag.id, (images) => images.filter((_, j) => j !== i))}
+              />
+              <Button
+                title={t('itemEdit.addImages')}
+                variant="text"
+                compact
+                style={styles.alignStart}
+                accessibilityLabel={t('itemEdit.addImagesTo', { name })}
+                onPress={() => void addTagImages(tag.id)}
+              />
             </View>
           );
         })}
@@ -224,4 +272,5 @@ const useStyles = makeStyles((c) => ({
   },
   tagHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   tagName: { flex: 1, fontWeight: '600' },
+  alignStart: { alignSelf: 'flex-start' },
 }));

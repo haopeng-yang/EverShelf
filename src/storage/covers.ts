@@ -1,10 +1,11 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { newId } from '../models/ids';
+import { itemImageUris } from '../models/images';
 import type { ShelfState } from '../models/types';
 
-// Cover images are copied into the app's own documents folder, because the
-// picker's files live in a cache the system may clear. covers.web.ts is used
+// Cover images, and images added to tags, are copied into the app's own
+// documents folder, because the picker's files live in a cache the system may clear. covers.web.ts is used
 // on web instead, where there is no file system.
 
 function coversDirectory(): Directory {
@@ -82,7 +83,8 @@ export function pruneCovers(state: ShelfState): void {
     return;
   }
   // Compare by file name: stored URIs and listed URIs may be formatted differently.
-  const inUse = new Set(state.items.map((i) => i.coverUri?.split('/').pop()).filter(Boolean));
+  // Tag images are kept in the same folder as covers.
+  const inUse = new Set(state.items.flatMap(itemImageUris).map((uri) => uri.split('/').pop()));
   for (const entry of entries) {
     if (entry instanceof File && !inUse.has(entry.name)) {
       try {

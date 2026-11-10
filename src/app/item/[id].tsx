@@ -9,6 +9,7 @@ import { Button } from '@/components/Button';
 import { Cover } from '@/components/Cover';
 import { LockedScreen } from '@/components/LockedShelf';
 import { NotFound } from '@/components/NotFound';
+import { TagImages } from '@/components/TagImages';
 import { useT } from '@/i18n/useT';
 import { durationLabel } from '@/models/queue';
 import type { VideoSummary } from '@/models/types';
@@ -99,7 +100,7 @@ export default function ItemScreen() {
         <View style={[styles.fields, sideBySide && styles.fieldsSide]}>
           <Field name={t('tag.title')} value={item.title} />
           {item.tags.map((tag) => (
-            <Field key={tag.id} name={tag.name} value={tag.value} />
+            <Field key={tag.id} name={tag.name} value={tag.value} images={tag.images} />
           ))}
           {book.chapterCount > 0 && (
             <Text style={styles.chapters}>
@@ -158,14 +159,18 @@ export default function ItemScreen() {
   );
 }
 
-function Field({ name, value }: { name: string; value: string }) {
+function Field({ name, value, images = [] }: { name: string; value: string; images?: string[] }) {
   const styles = useStyles();
   return (
     <View style={styles.field}>
       <Text style={styles.fieldName}>{name}:</Text>
-      <Text style={[styles.fieldValue, !value && styles.fieldEmpty]} selectable>
-        {value || '—'}
-      </Text>
+      {/* A tag with only images doesn't need the "—" for its empty value. */}
+      {(value || images.length === 0) && (
+        <Text style={[styles.fieldValue, !value && styles.fieldEmpty]} selectable>
+          {value || '—'}
+        </Text>
+      )}
+      <TagImages images={images} name={name} />
     </View>
   );
 }

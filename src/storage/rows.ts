@@ -94,6 +94,8 @@ export interface TagRow {
   name: string;
   value: string;
   position: number;
+  /** JSON array of image URIs; '[]' when there are none. */
+  images: string;
 }
 
 export interface ChapterRow {
@@ -171,7 +173,10 @@ export function rowsToState(shelfRows: ShelfRow[], itemRows: ItemRow[], tagRows:
     coverUri: row.cover_uri,
     tags: (tagsByItem.get(row.id) ?? [])
       .sort((a, b) => a.position - b.position)
-      .map((t): Tag => ({ id: t.id, name: t.name, value: t.value })),
+      .map((t): Tag => {
+        const images = parseStringArray(t.images ?? '[]');
+        return { id: t.id, name: t.name, value: t.value, ...(images.length > 0 ? { images } : {}) };
+      }),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }));
@@ -203,7 +208,7 @@ export function itemToRow(item: Item): ItemRow {
 }
 
 export function tagToRow(itemId: string, tag: Tag, position: number): TagRow {
-  return { id: tag.id, item_id: itemId, name: tag.name, value: tag.value, position };
+  return { id: tag.id, item_id: itemId, name: tag.name, value: tag.value, position, images: JSON.stringify(tag.images ?? []) };
 }
 
 export function chapterToRow(chapter: Chapter): ChapterRow {

@@ -265,8 +265,8 @@ function insertTags(item: Item): Statement[] {
   return item.tags.map((tag, index) => {
     const row = tagToRow(item.id, tag, index);
     return {
-      sql: 'INSERT INTO tags (id, item_id, name, value, position) VALUES (?, ?, ?, ?, ?)',
-      params: [row.id, row.item_id, row.name, row.value, row.position],
+      sql: 'INSERT INTO tags (id, item_id, name, value, position, images) VALUES (?, ?, ?, ?, ?, ?)',
+      params: [row.id, row.item_id, row.name, row.value, row.position, row.images],
     };
   });
 }

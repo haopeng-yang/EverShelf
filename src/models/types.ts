@@ -5,6 +5,12 @@ export interface Tag {
   id: Id;
   name: string;
   value: string;
+  /**
+   * Pictures attached to the tag, e.g. a video's "Important frames", in display
+   * order. Local file URIs kept beside the covers (see covers.ts). Left out
+   * when the tag has none.
+   */
+  images?: string[];
 }
 
 /** One thing stored on a shelf: a book, movie, video, etc. */

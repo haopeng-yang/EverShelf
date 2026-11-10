@@ -15,7 +15,8 @@ import {
   type BackupVideo,
   type ParsedBackup,
 } from '../models/backup';
-import type { FileKind, Id, Item, ShelfState } from '../models/types';
+import { tagImageUris } from '../models/images';
+import type { FileKind, Id, Item, ShelfState, Tag } from '../models/types';
 import { createBackupZip, freeSpace, type OpenedBackup } from './backupFiles';
 import {
   chapterFileName,
@@ -91,6 +92,11 @@ export async function exportBackup(
     const dataUri = await readCoverAsDataUri(item.coverUri);
     if (dataUri) covers.set(item.id, dataUri);
   }
+  const tagImages = new Map<string, string>();
+  for (const uri of state.items.flatMap(tagImageUris)) {
+    const dataUri = await readCoverAsDataUri(uri);
+    if (dataUri) tagImages.set(uri, dataUri);
+  }
 
   const kinds = await loadFileKinds(db);
   const idsOf = (fileKind: FileKind) => state.items.filter((item) => kinds.get(item.id) === fileKind).map((item) => item.id);
@@ -102,7 +108,7 @@ export async function exportBackup(
   if (choice.videos) media.videos = await collectVideos(db, idsOf('video'), files);
 
   const now = new Date();
-  const json = strToU8(JSON.stringify(createBackup(state, covers, now, media)));
+  const json = strToU8(JSON.stringify(createBackup(state, covers, now, media, tagImages)));
   const total = json.length + files.reduce((sum, f) => sum + f.size, 0);
   const free = freeSpace();
   if (free !== null && total > free) throw new NotEnoughSpaceError(total, free);
@@ -234,20 +240,30 @@ function withoutItemId<T extends { itemId: Id }>({ itemId: _itemId, ...rest }: T
   return rest;
 }
 
-/** Saves a parsed backup's covers into app storage and returns the state to load. */
+/** Saves a parsed backup's covers and tag images into app storage and returns the state to load. */
 export async function restoreBackupCovers(backup: ParsedBackup): Promise<ShelfState> {
+  const write = async (dataUri: string, title: string): Promise<string | null> => {
+    try {
+      return await writeCoverFromDataUri(dataUri);
+    } catch (error) {
+      console.warn('Skipping unreadable image for', title, error);
+      return null;
+    }
+  };
   const items: Item[] = [];
   for (const item of backup.state.items) {
     const dataUri = backup.covers.get(item.id);
-    let coverUri: string | null = null;
-    if (dataUri) {
-      try {
-        coverUri = await writeCoverFromDataUri(dataUri);
-      } catch (error) {
-        console.warn('Skipping unreadable cover for', item.title, error);
+    const coverUri = dataUri ? await write(dataUri, item.title) : null;
+    const tags: Tag[] = [];
+    for (const { images: dataUris, ...tag } of item.tags) {
+      const images: string[] = [];
+      for (const image of dataUris ?? []) {
+        const uri = await write(image, item.title);
+        if (uri) images.push(uri);
       }
+      tags.push(images.length > 0 ? { ...tag, images } : tag);
     }
-    items.push({ ...item, coverUri });
+    items.push({ ...item, coverUri, tags });
   }
   return { ...backup.state, items };
 }

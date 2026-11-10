@@ -45,6 +45,7 @@ import {
   MIGRATE_V10,
   migrateV11 as migrateV11Statements,
   migrateV12 as migrateV12Statements,
+  migrateV13 as migrateV13Statements,
   SET_SUBTITLE_CHOICE,
   SET_VIDEO_FINISHED,
   FINISH_VIDEO,
@@ -111,6 +112,13 @@ function migrateAll(db: DatabaseSync) {
   db.exec(MIGRATE_V10);
   migrateV11(db);
   migrateV12(db);
+  migrateV13(db);
+}
+
+/** The version 13 upgrade, as migrate() in database.ts runs it. */
+function migrateV13(db: DatabaseSync) {
+  const columns = db.prepare('PRAGMA table_info(tags)').all().map((c) => String(c.name));
+  for (const sql of migrateV13Statements(columns)) db.exec(sql);
 }
 
 /** The version 12 upgrade, as migrate() in database.ts runs it. */
@@ -214,7 +222,14 @@ describe('SQLite storage', () => {
     const current = state.items.find((i) => i.id === dune.id)!;
     step({
       type: 'item/save',
-      item: { ...current, title: 'Dune', tags: [{ id: 'new-tag', name: 'Rating', value: '5/5' }, current.tags[0]] },
+      item: {
+        ...current,
+        title: 'Dune',
+        tags: [
+          { id: 'new-tag', name: 'Rating', value: '5/5', images: ['file:///covers/a.jpg', 'file:///covers/b.png'] },
+          current.tags[0],
+        ],
+      },
       now: 5,
     });
 
@@ -512,6 +527,8 @@ describe('Comic storage', () => {
     const db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON;');
     for (const sql of [CREATE_TABLES_V1, CREATE_TABLES_V2, CREATE_TABLES_V3, MIGRATE_V4, MIGRATE_V5, MIGRATE_V6]) db.exec(sql);
+    // The items below are saved with today's statements, which need the tags table's images column.
+    migrateV13(db);
     insertShelvesWithoutKinds(db, createDefaultState());
     const state = dispatch(db, createDefaultState(), addItem(createDefaultState().shelves[0], 'Dune'));
     const itemId = state.items[0].id;
@@ -549,6 +566,8 @@ describe('Shelf kinds', () => {
     for (const sql of [CREATE_TABLES_V1, CREATE_TABLES_V2, CREATE_TABLES_V3, MIGRATE_V4, MIGRATE_V5, MIGRATE_V6, MIGRATE_V8]) {
       db.exec(sql);
     }
+    // The items below are saved with today's statements, which need the tags table's images column.
+    migrateV13(db);
     let state: ShelfState = {
       shelves: [
         ...createDefaultState().shelves,
@@ -786,6 +805,19 @@ describe('Shelf locks', () => {
     step({ type: 'shelf/setLock', shelfId: state.shelves.at(-1)!.id, lock: { salt: 'ee', hash: 'ff' } });
   });
 
+  it('upgrading to version 13 keeps existing tags, with no images, and can run twice', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec(CREATE_TABLES_V1);
+    db.prepare("INSERT INTO shelves (id, name, position, default_tag_names) VALUES ('s', 'Shelf', 0, '[]')").run();
+    db.prepare("INSERT INTO items (id, shelf_id, title, cover_uri, created_at, updated_at) VALUES ('i', 's', 'Dune', NULL, 1, 1)").run();
+    db.prepare("INSERT INTO tags (id, item_id, name, value, position) VALUES ('t', 'i', 'Author', 'Frank Herbert', 0)").run();
+    for (const sql of [CREATE_TABLES_V2, CREATE_TABLES_V3, MIGRATE_V4, MIGRATE_V5, MIGRATE_V6, MIGRATE_V8]) db.exec(sql);
+    migrateV9(db);
+    migrateV13(db);
+    migrateV13(db);
+    expect(load(db).items[0].tags).toEqual([{ id: 't', name: 'Author', value: 'Frank Herbert' }]);
+  });
+
   it('upgrading an older database keeps its shelves, unlocked', () => {
     const db = new DatabaseSync(':memory:');
     db.exec(CREATE_TABLES_V1);
@@ -797,6 +829,7 @@ describe('Shelf locks', () => {
     db.exec(MIGRATE_V6);
     db.exec(MIGRATE_V8);
     migrateV9(db);
+    migrateV13(db);
     expect(load(db).shelves).toEqual([{ id: 'old', name: 'Old', kind: 'collection', defaultTagNames: [] }]);
   });
 
@@ -814,6 +847,7 @@ describe('Shelf locks', () => {
     for (const sql of shelfLockRepair(columns())) db.exec(sql);
     db.exec(MIGRATE_V8);
     migrateV9(db);
+    migrateV13(db);
     expect(load(db).shelves).toEqual([{ id: 's', name: 'Shelf', kind: 'collection', defaultTagNames: [] }]);
     // On a database that already has them, it does nothing.
     expect(shelfLockRepair(columns())).toEqual([]);

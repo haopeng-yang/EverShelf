@@ -37,6 +37,30 @@ describe('backup', () => {
     expect(JSON.stringify(file)).not.toContain('file:///');
   });
 
+  it('embeds tag images as data URIs, leaving out unreadable or missing ones', () => {
+    const state = sampleState();
+    const dune = state.items[0];
+    const FRAME = 'data:image/png;base64,BBBB';
+    const withImages: ShelfState = {
+      ...state,
+      items: state.items.map((item) =>
+        item.id === dune.id
+          ? { ...item, tags: [{ ...item.tags[0], images: ['file:///covers/f1.png', 'file:///covers/gone.png'] }, ...item.tags.slice(1)] }
+          : item,
+      ),
+    };
+    const file = createBackup(withImages, new Map(), new Date(), {}, new Map([['file:///covers/f1.png', FRAME]]));
+    expect(JSON.stringify(file)).not.toContain('file:///');
+
+    const parsedTags = parseBackup(JSON.stringify(file)).state.items[0].tags;
+    expect(parsedTags[0].images).toEqual([FRAME]);
+    expect(parsedTags.slice(1).every((tag) => tag.images === undefined)).toBe(true);
+
+    const tampered = JSON.parse(JSON.stringify(file));
+    tampered.items[0].tags[0].images = ['javascript:alert(1)', 7];
+    expect(parseBackup(JSON.stringify(tampered)).state.items[0].tags[0].images).toBeUndefined();
+  });
+
   it('rejects files that are not EverShelf backups', () => {
     expect(() => parseBackup('not json')).toThrow(BackupError);
     expect(() => parseBackup('{"hello": 1}')).toThrow('not an EverShelf backup');

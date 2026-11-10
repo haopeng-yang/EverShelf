@@ -29,6 +29,8 @@ import {
 // can also list comics, songs and videos, whose files sit beside it under
 // files/<item id>/ (see mediaEntryName). Each list is left out when that kind
 // wasn't chosen for the backup. A plain JSON backup from before still restores.
+// A tag can carry `images`, as data URIs like covers. They were added without
+// a new version number too: older apps ignore them.
 
 export const BACKUP_FORMAT_VERSION = 3;
 
@@ -91,7 +93,10 @@ export interface BackupFile extends BackupMedia {
 }
 
 export interface ParsedBackup {
-  /** Items have coverUri null; covers are restored separately from `covers`. */
+  /**
+   * Items have coverUri null; covers are restored separately from `covers`.
+   * Tag images are still data URIs here, until restoreBackupCovers saves them.
+   */
   state: ShelfState;
   /** Item id -> cover as a data URI. */
   covers: Map<Id, string>;
@@ -126,14 +131,31 @@ export class BackupError extends Error {
   }
 }
 
-/** `covers` maps item id -> cover data URI, for items that have one. Kinds left out of `media` aren't in the file. */
-export function createBackup(state: ShelfState, covers: Map<Id, string>, exportedAt: Date, media: BackupMedia = {}): BackupFile {
+/**
+ * `covers` maps item id -> cover data URI, for items that have one.
+ * `tagImages` maps a tag image's stored URI -> its data URI; an image missing
+ * from it is left out. Kinds left out of `media` aren't in the file.
+ */
+export function createBackup(
+  state: ShelfState,
+  covers: Map<Id, string>,
+  exportedAt: Date,
+  media: BackupMedia = {},
+  tagImages: Map<string, string> = new Map(),
+): BackupFile {
   return {
     app: 'EverShelf',
     version: BACKUP_FORMAT_VERSION,
     exportedAt: exportedAt.toISOString(),
     shelves: state.shelves,
-    items: state.items.map(({ coverUri: _coverUri, ...item }) => ({ ...item, cover: covers.get(item.id) ?? null })),
+    items: state.items.map(({ coverUri: _coverUri, ...item }) => ({
+      ...item,
+      tags: item.tags.map(({ images: stored, ...tag }) => {
+        const images = (stored ?? []).flatMap((uri) => tagImages.get(uri) ?? []);
+        return images.length > 0 ? { ...tag, images } : tag;
+      }),
+      cover: covers.get(item.id) ?? null,
+    })),
     ...media,
   };
 }
@@ -397,7 +419,11 @@ function parseTag(raw: unknown, n: number): Tag {
   if (!isObject(raw) || typeof raw.id !== 'string' || typeof raw.name !== 'string' || typeof raw.value !== 'string') {
     throw new BackupError('badTag', { n });
   }
-  return { id: raw.id, name: raw.name, value: raw.value };
+  // Images are optional: an unreadable one is dropped rather than refusing the backup.
+  const images = (Array.isArray(raw.images) ? raw.images : []).filter(
+    (image): image is string => typeof image === 'string' && image.startsWith('data:image/'),
+  );
+  return { id: raw.id, name: raw.name, value: raw.value, ...(images.length > 0 ? { images } : {}) };
 }
 
 function isHex(value: unknown): value is string {

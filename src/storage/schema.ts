@@ -2,7 +2,7 @@
 // run the same SQL against Node's built-in SQLite.
 
 /** Bump this and add a step in database.ts `migrate` whenever the tables change. */
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 
 export const CREATE_TABLES_V1 = `
 CREATE TABLE shelves (
@@ -205,6 +205,15 @@ export function migrateV12(videoColumns: string[]): string[] {
     .map((column) => `ALTER TABLE videos ADD COLUMN ${column} TEXT`);
 }
 
+/**
+ * Version 13: pictures on tags, as a JSON array of file URIs. Given the tags
+ * table's column names, returns the statement that adds it if it's missing
+ * (see the version 7 note).
+ */
+export function migrateV13(tagColumns: string[]): string[] {
+  return tagColumns.includes('images') ? [] : ["ALTER TABLE tags ADD COLUMN images TEXT NOT NULL DEFAULT '[]'"];
+}
+
 export const SELECT_VIDEO =
   'SELECT item_id, file_name, format, duration_ms, width, height, subtitle_choice, audio_choice FROM videos WHERE item_id = ?';
 export const SET_SUBTITLE_CHOICE = 'UPDATE videos SET subtitle_choice = ? WHERE item_id = ?';
@@ -301,4 +310,4 @@ export const SELECT_SHELVES =
   'SELECT id, name, kind, position, default_tag_names, lock_salt, lock_hash FROM shelves ORDER BY position, rowid';
 export const SELECT_ITEMS =
   'SELECT id, shelf_id, title, cover_uri, created_at, updated_at FROM items ORDER BY created_at, rowid';
-export const SELECT_TAGS = 'SELECT id, item_id, name, value, position FROM tags ORDER BY item_id, position';
+export const SELECT_TAGS = 'SELECT id, item_id, name, value, position, images FROM tags ORDER BY item_id, position';

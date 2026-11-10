@@ -60,6 +60,7 @@ import {
   MIGRATE_V10,
   migrateV11,
   migrateV12,
+  migrateV13,
   SET_AUDIO_CHOICE,
   SET_SUBTITLE_CHOICE,
   SET_VIDEO_FINISHED,
@@ -160,7 +161,11 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
       const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(videos)');
       for (const sql of migrateV12(columns.map((c) => c.name))) await db.execAsync(sql);
     }
-    // Future upgrades go here: if (version < 13) { ... }
+    if (version < 13) {
+      const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(tags)');
+      for (const sql of migrateV13(columns.map((c) => c.name))) await db.execAsync(sql);
+    }
+    // Future upgrades go here: if (version < 14) { ... }
 
     // Seed the starting shelves only on a fresh install, so shelves the user
     // deletes later don't come back. They're named in the phone's language.
