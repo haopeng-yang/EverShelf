@@ -1,7 +1,7 @@
-import { addItem, addShelf, addTag } from '../src/models/actions';
+import { addItem, addShelf, addTag, newItemDraftLikeLast } from '../src/models/actions';
 import { createDefaultState } from '../src/models/defaults';
 import { moveInArray, selectItemsOnShelf, shelfReducer, type ShelfAction } from '../src/models/shelfReducer';
-import type { ShelfState } from '../src/models/types';
+import type { Item, Shelf, ShelfState } from '../src/models/types';
 
 function apply(state: ShelfState, ...actions: ShelfAction[]): ShelfState {
   return actions.reduce(shelfReducer, state);
@@ -131,5 +131,49 @@ describe('moveInArray', () => {
   it('clamps the target index', () => {
     expect(moveInArray(['a', 'b', 'c'], 0, 99)).toEqual(['b', 'c', 'a']);
     expect(moveInArray(['a', 'b', 'c'], 2, -5)).toEqual(['c', 'a', 'b']);
+  });
+});
+
+describe('newItemDraftLikeLast', () => {
+  const shelf: Shelf = { id: 's1', name: 'A', kind: 'collection', defaultTagNames: ['Date', 'Description'] };
+  const item = (id: string, shelfId: string, createdAt: number, tagNames: string[]): Item => ({
+    id,
+    shelfId,
+    title: id,
+    coverUri: null,
+    tags: tagNames.map((name, i) => ({ id: `${id}-t${i}`, name, value: `${name} value`, images: ['data:x'] })),
+    createdAt,
+    updatedAt: createdAt,
+  });
+
+  it("copies the newest item's tag names on the same shelf, with empty values", () => {
+    const items = [
+      item('old', 's1', 1, ['Old tag']),
+      item('newest', 's1', 3, ['Code', 'Episode', 'Link']),
+      item('other shelf', 's2', 9, ['Elsewhere']),
+    ];
+    const draft = newItemDraftLikeLast(shelf, items);
+    expect(draft.shelfId).toBe('s1');
+    expect(draft.tags.map((tag) => tag.name)).toEqual(['Code', 'Episode', 'Link']);
+    expect(draft.tags.every((tag) => tag.value === '' && tag.images === undefined)).toBe(true);
+    // Fresh tag ids, so the new item never shares a tag with the old one.
+    expect(draft.tags.map((tag) => tag.id)).not.toContain('newest-t0');
+  });
+
+  it("uses the shelf's default tags on an empty shelf", () => {
+    expect(newItemDraftLikeLast(shelf, [item('x', 's2', 1, ['Other'])]).tags.map((tag) => tag.name)).toEqual([
+      'Date',
+      'Description',
+    ]);
+  });
+
+  it('uses the default tags when the last item has none, and skips blank names', () => {
+    expect(newItemDraftLikeLast(shelf, [item('bare', 's1', 1, [])]).tags.map((tag) => tag.name)).toEqual([
+      'Date',
+      'Description',
+    ]);
+    expect(newItemDraftLikeLast(shelf, [item('blank', 's1', 1, ['  ', 'Code'])]).tags.map((tag) => tag.name)).toEqual([
+      'Code',
+    ]);
   });
 });

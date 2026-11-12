@@ -12,7 +12,7 @@ import { NotFound } from '@/components/NotFound';
 import { TagImages } from '@/components/TagImages';
 import { TextField } from '@/components/TextField';
 import { useT } from '@/i18n/useT';
-import { newItemDraft } from '@/models/actions';
+import { newItemDraftLikeLast } from '@/models/actions';
 import { tagValuePlaceholder } from '@/models/defaults';
 import { newId } from '@/models/ids';
 import { itemImageUris, tagImageUris } from '@/models/images';
@@ -37,7 +37,8 @@ export default function EditItemScreen() {
   const shelf = state.shelves.find((s) => s.id === (original?.shelfId ?? shelfId));
   const [draft, setDraft] = useState<Item | null>(() => {
     if (original) return { ...original, tags: original.tags.map((tag) => ({ ...tag })) };
-    return shelf && !id ? newItemDraft(shelf) : null;
+    // A new item copies the tag names of the last one added to this shelf.
+    return shelf && !id ? newItemDraftLikeLast(shelf, state.items) : null;
   });
   const [saving, setSaving] = useState(false);
   const styles = useStyles();

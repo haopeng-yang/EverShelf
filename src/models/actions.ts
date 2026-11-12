@@ -32,6 +32,23 @@ export function newItemDraft(shelf: Shelf, title = '', coverUri: string | null =
 }
 
 /**
+ * A new item for the "Add item" screen. It starts with the tag names of the
+ * shelf's most recently added item, in the same order, with empty values, so
+ * a run of similar items only needs the values filled in. On an empty shelf,
+ * or when that item has no tags, it falls back to the shelf's default tags.
+ */
+export function newItemDraftLikeLast(shelf: Shelf, items: Item[]): Item {
+  const draft = newItemDraft(shelf);
+  let last: Item | undefined;
+  for (const item of items) {
+    if (item.shelfId === shelf.id && (!last || item.createdAt > last.createdAt)) last = item;
+  }
+  const names = last?.tags.map((tag) => tag.name.trim()).filter(Boolean) ?? [];
+  if (names.length === 0) return draft;
+  return { ...draft, tags: names.map((name) => ({ id: newId(), name, value: '' })) };
+}
+
+/**
  * Fills tags by name, e.g. { Author: 'Mira Holt' }: a tag the item already has
  * (from its shelf's defaults) gets the value; others are added. Empty values are skipped.
  */
