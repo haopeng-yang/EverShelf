@@ -95,6 +95,7 @@ export default function ItemScreen() {
         <Cover
           uri={item.coverUri}
           title={item.title}
+          fit="whole"
           style={sideBySide ? styles.coverSide : [styles.coverTop, { width: Math.min(width * 0.6, 260) }]}
         />
         <View style={[styles.fields, sideBySide && styles.fieldsSide]}>
