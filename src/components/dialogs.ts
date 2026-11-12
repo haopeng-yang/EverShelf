@@ -8,6 +8,32 @@ export function showMessage(message: string, title = 'EverShelf'): void {
   else Alert.alert(title, message);
 }
 
+/** The two ways to bring in a backup. */
+export type ImportMode = 'merge' | 'replace';
+
+/**
+ * Asks whether to merge a backup in or replace everything with it. Resolves
+ * null if they cancel. The browser has no three-button dialog, so on web it
+ * asks about merging first, then about replacing.
+ */
+export function chooseImportMode(
+  title: string,
+  message: string,
+  labels: { merge: string; replace: string; cancel: string; webMerge: string; webReplace: string },
+): Promise<ImportMode | null> {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n\n${message}\n\n${labels.webMerge}`)) return Promise.resolve('merge');
+    return Promise.resolve(window.confirm(labels.webReplace) ? 'replace' : null);
+  }
+  return new Promise((resolve) => {
+    Alert.alert(title, message, [
+      { text: labels.cancel, style: 'cancel', onPress: () => resolve(null) },
+      { text: labels.replace, style: 'destructive', onPress: () => resolve('replace') },
+      { text: labels.merge, onPress: () => resolve('merge') },
+    ], { cancelable: true, onDismiss: () => resolve(null) });
+  });
+}
+
 /**
  * Asks the user to confirm a destructive action. Resolves true if they agree.
  * Button labels come from the caller so they can be translated.

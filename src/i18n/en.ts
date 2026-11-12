@@ -162,21 +162,27 @@ export const en = {
   'settings.exportingPercent': 'Exporting… {percent}%',
   'settings.importingPercent': 'Restoring… {percent}%',
   'settings.backupHint':
-    'Export saves all shelves, items, tags and covers, plus the imported books, comics, songs and videos you choose, into one ZIP file you can keep in Files or Drive. Import replaces everything with a backup file.',
+    'Export saves all shelves, items, tags and covers, plus the imported books, comics, songs and videos you choose, into one ZIP file you can keep in Files or Drive. Import either adds a backup file to what’s here or replaces everything with it.',
   'settings.summary': '{shelves} shelves · {items} items',
   'settings.exportFailed': 'Could not export',
   'settings.importFailed': 'Could not import',
-  'settings.replaceTitle': 'Replace your shelf with this backup?',
-  'settings.replaceMessage':
-    'The backup has {backupShelves} shelves and {backupItems} items. Your current {shelves} shelves and {items} items will be replaced. Export a backup first if you want to keep them.',
+  'settings.importTitle': 'Import this backup?',
+  'settings.importMessage':
+    'The backup has {backupShelves} shelves and {backupItems} items.',
+  'settings.importFiles': 'It includes the files of {list}.',
+  'settings.importNoFiles': 'It has no imported files.',
+  'settings.importChoices':
+    'Merge adds the shelves and items you don’t have yet and keeps your current {shelves} shelves and {items} items, with their files.\n\nReplace removes everything here, imported files included, and puts the backup in its place.',
+  'settings.webMerge': 'OK merges the backup in. Cancel lets you replace everything instead.',
+  'settings.webReplace':
+    'Replace everything here, imported files included, with the backup? Export a backup first if you want to keep it.',
+  'settings.merge': 'Merge',
   'settings.replace': 'Replace',
+  'settings.mergedTitle': 'Backup merged',
+  'settings.merged': 'Added {shelves} shelves and {items} items. Items already here were left as they are.',
   'settings.restoredTitle': 'Backup restored',
   'settings.restored': 'Restored {shelves} shelves and {items} items.',
   'settings.restoredFiles': 'Restored the files of {list}.',
-  'settings.replaceFiles':
-    'It has the files of {list}, which will replace the imported files on this phone. Items whose files aren’t in the backup come back without them.',
-  'settings.replaceNoFiles':
-    'It has no imported files, so the books, comics, songs and videos imported on this phone will be removed. Their items come back without files.',
   'backupCount.books': '{count} books',
   'backupCount.books_one': '1 book',
   'backupCount.comics': '{count} comics',

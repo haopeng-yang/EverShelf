@@ -16,7 +16,7 @@ import {
   type ParsedBackup,
 } from '../models/backup';
 import { tagImageUris } from '../models/images';
-import type { FileKind, Id, Item, ShelfState, Tag } from '../models/types';
+import type { FileKind, Id, Item, Shelf, ShelfState, Tag } from '../models/types';
 import { createBackupZip, freeSpace, type OpenedBackup } from './backupFiles';
 import {
   chapterFileName,
@@ -289,7 +289,7 @@ function hasFiles(opened: OpenedBackup, itemId: Id, fileNames: string[]): boolea
  * Writes a backup's imported files back, with their rows: books' chapters,
  * and comics', songs' and videos' files copied out of the ZIP. Must run after
  * the backup's items are saved, since these belong to items. Item folders not
- * restored are deleted. An item that fails is skipped (and logged) so the
+ * restored are deleted, unless `prune` is false. An item that fails is skipped (and logged) so the
  * others still restore; it stays as a plain item. Returns how many of each
  * kind were restored.
  */
@@ -298,6 +298,8 @@ export async function restoreBackupFiles(
   backup: ParsedBackup,
   opened: OpenedBackup,
   onProgress?: (done: number, total: number) => void,
+  /** False when merging: files of items already here must stay. */
+  prune = true,
 ): Promise<Record<BackupKind, number>> {
   const restored = new Set<Id>();
   const counts: Record<BackupKind, number> = { books: 0, comics: 0, songs: 0, videos: 0 };
@@ -362,6 +364,23 @@ export async function restoreBackupFiles(
       await runStatements(db, restoreVideoStatements(video));
     });
   }
-  pruneBooks(restored);
+  if (prune) pruneBooks(restored);
   return counts;
+}
+
+/**
+ * The part of a backup that merging adds: the given items (as mergeBackupState
+ * returned them, moved onto their matching shelves) with their covers and files.
+ */
+export function backupForItems(backup: ParsedBackup, shelves: Shelf[], items: Item[]): ParsedBackup {
+  const ids = new Set(items.map((i) => i.id));
+  const keep = <T extends { itemId: Id }>(list: T[]) => list.filter((entry) => ids.has(entry.itemId));
+  return {
+    state: { shelves, items },
+    covers: backup.covers,
+    books: keep(backup.books),
+    comics: keep(backup.comics),
+    songs: keep(backup.songs),
+    videos: keep(backup.videos),
+  };
 }

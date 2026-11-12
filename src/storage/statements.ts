@@ -121,6 +121,14 @@ export function statementsForAction(action: ShelfAction, next: ShelfState): Stat
 
     case 'state/replace':
       return [{ sql: 'DELETE FROM shelves', params: [] }, ...insertState(next)];
+
+    case 'state/add': {
+      const firstNew = next.shelves.length - action.shelves.length;
+      return [
+        ...action.shelves.map((s, index) => insertShelf(s, firstNew + index)),
+        ...action.items.flatMap(insertItem),
+      ];
+    }
   }
 }
 

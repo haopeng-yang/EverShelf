@@ -5,16 +5,18 @@ import { useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
-import { confirm, showMessage } from '@/components/dialogs';
+import { chooseImportMode, confirm, showMessage } from '@/components/dialogs';
 import { ExportBackupSheet, formatBytes } from '@/components/ExportBackupSheet';
 import type { Translate } from '@/i18n';
 import { useT } from '@/i18n/useT';
 import { BackupError, parseBackup } from '@/models/backup';
+import { mergeBackupState } from '@/models/mergeBackup';
 import { useSettings, type LanguageSetting, type ThemeMode } from '@/state/SettingsProvider';
 import { useShelfDispatch, useShelfState } from '@/state/ShelfProvider';
 import { openBackupFile } from '@/storage/backupFiles';
 import {
   BACKUP_KINDS,
+  backupForItems,
   exportBackup,
   NotEnoughSpaceError,
   restorableCounts,
@@ -85,21 +87,40 @@ export default function SettingsScreen() {
       opened = await openBackupFile();
       if (opened === null) return;
       const backup = parseBackup(opened.json);
-      const message = t('settings.replaceMessage', {
-        backupShelves: backup.state.shelves.length,
-        backupItems: backup.state.items.length,
-        shelves: state.shelves.length,
-        items: state.items.length,
-      });
       const files = kindList(restorableCounts(backup, opened), t);
-      const filesNote = files ? t('settings.replaceFiles', { list: files }) : t('settings.replaceNoFiles');
-      const ok = await confirm(
-        t('settings.replaceTitle'),
-        `${message}\n\n${filesNote}`,
-        t('settings.replace'),
-        t('common.cancel'),
-      );
-      if (!ok) return;
+      const message = [
+        t('settings.importMessage', {
+          backupShelves: backup.state.shelves.length,
+          backupItems: backup.state.items.length,
+        }),
+        files ? t('settings.importFiles', { list: files }) : t('settings.importNoFiles'),
+      ].join(' ');
+      const choices = t('settings.importChoices', { shelves: state.shelves.length, items: state.items.length });
+      const mode = await chooseImportMode(t('settings.importTitle'), `${message}\n\n${choices}`, {
+        merge: t('settings.merge'),
+        replace: t('settings.replace'),
+        cancel: t('common.cancel'),
+        webMerge: t('settings.webMerge'),
+        webReplace: t('settings.webReplace'),
+      });
+      if (mode === null) return;
+
+      if (mode === 'merge') {
+        // Only what isn't here yet goes in; existing items, covers and files are left alone.
+        const merge = mergeBackupState(state, backup.state);
+        const added = backupForItems(backup, merge.shelves, merge.items);
+        const withCovers = await restoreBackupCovers(added);
+        const ok = await dispatch({ type: 'state/add', shelves: withCovers.shelves, items: withCovers.items });
+        if (!ok) throw new Error('Could not save the backup');
+        const mergedFiles = kindList(await restoreBackupFiles(db, added, opened, showProgress, false), t);
+        showMessage(
+          t('settings.merged', { shelves: withCovers.shelves.length, items: withCovers.items.length }) +
+            (mergedFiles ? `\n${t('settings.restoredFiles', { list: mergedFiles })}` : ''),
+          t('settings.mergedTitle'),
+        );
+        return;
+      }
+
       const restored = await restoreBackupCovers(backup);
       // Books, comics, songs and videos belong to items, so the items must be saved before they go in.
       if (!(await dispatch({ type: 'state/replace', state: restored }))) throw new Error('Could not save the backup');

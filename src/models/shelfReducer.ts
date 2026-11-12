@@ -26,7 +26,9 @@ export type ShelfAction =
   | { type: 'tag/update'; itemId: Id; tagId: Id; changes: Partial<Pick<Tag, 'name' | 'value'>>; now: number }
   | { type: 'tag/move'; itemId: Id; tagId: Id; toIndex: number; now: number }
   | { type: 'tag/remove'; itemId: Id; tagId: Id; now: number }
-  | { type: 'state/replace'; state: ShelfState };
+  | { type: 'state/replace'; state: ShelfState }
+  /** Adds shelves (after the current ones) and items, as merging a backup does. Nothing already here changes. */
+  | { type: 'state/add'; shelves: Shelf[]; items: Item[] };
 
 export function shelfReducer(state: ShelfState, action: ShelfAction): ShelfState {
   switch (action.type) {
@@ -103,6 +105,10 @@ export function shelfReducer(state: ShelfState, action: ShelfAction): ShelfState
 
     case 'state/replace':
       return action.state;
+
+    case 'state/add':
+      if (action.shelves.length === 0 && action.items.length === 0) return state;
+      return { shelves: [...state.shelves, ...action.shelves], items: [...state.items, ...action.items] };
   }
 }
 

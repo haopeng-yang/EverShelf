@@ -261,6 +261,16 @@ describe('SQLite storage', () => {
     const state = dispatch(db, createDefaultState(), { type: 'state/replace', state: replacement });
     expect(load(db)).toEqual(state);
   });
+
+  it('adds shelves and items from a merged backup after the current ones', () => {
+    const db = openTestDb();
+    const start = dispatch(db, createDefaultState(), addItem(createDefaultState().shelves[0], 'Dune'));
+    let backup = shelfReducer({ shelves: [], items: [] }, addShelf('Games'));
+    backup = shelfReducer(backup, addItem(backup.shelves[0], 'Celeste'));
+    const state = dispatch(db, start, { type: 'state/add', shelves: backup.shelves, items: backup.items });
+    expect(state.items.map((i) => i.title)).toEqual(['Dune', 'Celeste']);
+    expect(load(db)).toEqual(state);
+  });
 });
 
 describe('Book storage', () => {
