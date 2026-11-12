@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
-import { Appearance, StyleSheet, useColorScheme, type ImageStyle, type TextStyle, type ViewStyle } from 'react-native';
+import { Appearance, Platform, StyleSheet, useColorScheme, type ImageStyle, type TextStyle, type ViewStyle } from 'react-native';
 
 import { useSettings } from '@/state/SettingsProvider';
 
@@ -150,7 +150,9 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
     mode === 'purple' ? purpleTheme : mode === 'dark' || (mode === 'system' && systemScheme === 'dark') ? darkTheme : lightTheme;
   // Tell the native side too, so Android's own parts (dialogs, the keyboard)
   // match. The strip behind the status bar is set per screen, in _layout.tsx.
+  // react-native-web has no setColorScheme, so skip it in the browser.
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     Appearance.setColorScheme(mode === 'system' ? 'unspecified' : mode === 'dark' ? 'dark' : 'light');
   }, [mode]);
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
