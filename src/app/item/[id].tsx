@@ -1,7 +1,7 @@
 import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { percentLabel } from '@/books/progress';
 import { resolutionLabel } from '@/books/video/readVideo';
@@ -9,7 +9,7 @@ import { Button } from '@/components/Button';
 import { Cover } from '@/components/Cover';
 import { LockedScreen } from '@/components/LockedShelf';
 import { NotFound } from '@/components/NotFound';
-import { TagImages } from '@/components/TagImages';
+import { ImageViewer, TagImages } from '@/components/TagImages';
 import { useT } from '@/i18n/useT';
 import { durationLabel } from '@/models/queue';
 import type { VideoSummary } from '@/models/types';
@@ -36,6 +36,7 @@ export default function ItemScreen() {
     status: string | null;
   }>({ chapterCount: 0, continueAt: null, status: null });
   const [video, setVideo] = useState<VideoSummary | null>(null);
+  const [coverOpen, setCoverOpen] = useState(false);
   // Reload whenever the screen comes back into view, e.g. after reading or watching.
   useFocusEffect(
     useCallback(() => {
@@ -92,12 +93,19 @@ export default function ItemScreen() {
       <Stack.Screen options={{ title: shelf?.name ?? t('item.fallbackTitle') }} />
 
       <View style={sideBySide ? styles.row : styles.column}>
-        <Cover
-          uri={item.coverUri}
-          title={item.title}
-          fit="whole"
+        {/* Tapping the cover opens it full screen, to see it more clearly. */}
+        <Pressable
+          onPress={() => setCoverOpen(true)}
+          disabled={!item.coverUri}
+          accessibilityRole={item.coverUri ? 'imagebutton' : undefined}
+          accessibilityLabel={item.coverUri ? t('item.openCover', { title: item.title }) : undefined}
           style={sideBySide ? styles.coverSide : [styles.coverTop, { width: Math.min(width * 0.6, 260) }]}
-        />
+        >
+          <Cover uri={item.coverUri} title={item.title} fit="whole" style={styles.coverFill} />
+        </Pressable>
+        {coverOpen && item.coverUri && (
+          <ImageViewer images={[item.coverUri]} name={item.title} start={0} onClose={() => setCoverOpen(false)} />
+        )}
         <View style={[styles.fields, sideBySide && styles.fieldsSide]}>
           <Field name={t('tag.title')} value={item.title} />
           {item.tags.map((tag) => (
@@ -182,6 +190,7 @@ const useStyles = makeStyles((c, look) => ({
   column: { gap: spacing.xl },
   coverSide: { width: 200 },
   coverTop: { alignSelf: 'center' },
+  coverFill: { width: '100%' },
   alignStart: { alignSelf: 'flex-start' },
   // The raised look gathers the details on one white card, as on the design's task page.
   fields: {

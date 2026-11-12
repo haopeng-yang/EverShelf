@@ -90,6 +90,7 @@ export const en = {
 
   // Item detail
   'item.fallbackTitle': 'Item',
+  'item.openCover': 'Cover of {title}, opens full screen',
 
   // Add / edit item
   'itemEdit.editTitle': 'Edit item',

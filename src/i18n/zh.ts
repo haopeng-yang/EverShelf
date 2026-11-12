@@ -82,6 +82,7 @@ export const zh: Translations = {
   'notFound.back': '返回书架',
 
   'item.fallbackTitle': '项目',
+  'item.openCover': '{title}的封面，点按全屏查看',
 
   'itemEdit.editTitle': '编辑项目',
   'itemEdit.newTitle': '新建{shelf}项目',

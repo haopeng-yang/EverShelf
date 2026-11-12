@@ -52,7 +52,7 @@ export function TagImages({ images, name, onRemove }: TagImagesProps) {
 }
 
 /** Full-screen images on black, swiped left and right. Tap ✕ or go back to close. */
-function ImageViewer({ images, name, start, onClose }: { images: string[]; name: string; start: number; onClose: () => void }) {
+export function ImageViewer({ images, name, start, onClose }: { images: string[]; name: string; start: number; onClose: () => void }) {
   const styles = useStyles();
   const t = useT();
   const { width, height } = useWindowDimensions();
