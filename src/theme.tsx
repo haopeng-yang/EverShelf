@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { Appearance, Platform, StyleSheet, useColorScheme, type ImageStyle, type TextStyle, type ViewStyle } from 'react-native';
 
+import { accentPalette } from '@/models/accentColor';
 import { useSettings } from '@/state/SettingsProvider';
 
 // All colours, sizes and spacing in one place. Restyling the app later should
@@ -55,28 +56,6 @@ export const darkColors: Colors = {
   shadow: '#000000',
 };
 
-/** A light theme with a purple header and accents, on a soft lavender background. */
-export const purpleColors: Colors = {
-  background: '#F3F1FB',
-  surface: '#FFFFFF',
-  border: '#E3DDF7',
-  text: '#1E1A3C',
-  textMuted: '#8C87A6',
-  primary: '#6C3FE6',
-  onPrimary: '#FFFFFF',
-  danger: '#E5484D',
-  coverPlaceholder: '#D6CCF8',
-  coverLetter: '#FFFFFF',
-  tabSelected: '#6C3FE6',
-  onTabSelected: '#FFFFFF',
-  overlay: 'rgba(36, 20, 92, 0.45)',
-  header: '#6C3FE6',
-  onHeader: '#FFFFFF',
-  headerTint: '#FFFFFF',
-  card: '#FFFFFF',
-  shadow: '#5B3FD9',
-};
-
 /** How a theme shapes things, beyond its colours. */
 export interface Look {
   /** Items, tags and buttons sit on white cards with a soft coloured shadow. */
@@ -86,7 +65,6 @@ export interface Look {
 }
 
 const flatLook: Look = { raised: false, pills: false };
-const raisedLook: Look = { raised: true, pills: true };
 
 export const spacing = {
   xs: 4,
@@ -127,7 +105,7 @@ export function raisedShadow(c: Colors, look: Look): ViewStyle {
 }
 
 interface Theme {
-  /** Dark backgrounds, light text. Purple counts as light. */
+  /** Dark backgrounds, light text. */
   dark: boolean;
   colors: Colors;
   look: Look;
@@ -137,7 +115,6 @@ interface Theme {
 
 const lightTheme: Theme = { dark: false, colors: lightColors, look: flatLook, statusBar: 'dark' };
 const darkTheme: Theme = { dark: true, colors: darkColors, look: flatLook, statusBar: 'light' };
-const purpleTheme: Theme = { dark: false, colors: purpleColors, look: raisedLook, statusBar: 'light' };
 
 const ThemeContext = createContext<Theme>(lightTheme);
 
@@ -146,8 +123,16 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
   const { settings } = useSettings();
   const systemScheme = useColorScheme();
   const mode = settings.themeMode;
-  const theme =
-    mode === 'purple' ? purpleTheme : mode === 'dark' || (mode === 'system' && systemScheme === 'dark') ? darkTheme : lightTheme;
+  const accent = settings.accentColor;
+  const base = mode === 'dark' || (mode === 'system' && systemScheme === 'dark') ? darkTheme : lightTheme;
+  // A new object only when the accent or light/dark changes: makeStyles caches styles per theme object.
+  const theme = useMemo(
+    () =>
+      accent
+        ? { ...base, colors: { ...base.colors, ...accentPalette(accent, base.colors.background, base.dark) } }
+        : base,
+    [base, accent],
+  );
   // Tell the native side too, so Android's own parts (dialogs, the keyboard)
   // match. The strip behind the status bar is set per screen, in _layout.tsx.
   // react-native-web has no setColorScheme, so skip it in the browser.

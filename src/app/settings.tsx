@@ -4,6 +4,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 
+import { AccentColorSheet, DEFAULT_ACCENT } from '@/components/AccentColorSheet';
 import { Button } from '@/components/Button';
 import { chooseImportMode, confirm, showMessage } from '@/components/dialogs';
 import { ExportBackupSheet, formatBytes } from '@/components/ExportBackupSheet';
@@ -37,6 +38,7 @@ export default function SettingsScreen() {
   const t = useT();
   const [busy, setBusy] = useState<'export' | 'import' | 'clear' | null>(null);
   const [exportSheetOpen, setExportSheetOpen] = useState(false);
+  const [colorSheetOpen, setColorSheetOpen] = useState(false);
   /** Whole percent done while exporting or restoring files, or null before any are copied. */
   const [percent, setPercent] = useState<number | null>(null);
   const db = useSQLiteContext();
@@ -57,7 +59,6 @@ export default function SettingsScreen() {
     { value: 'system', label: t('settings.system') },
     { value: 'light', label: t('settings.light') },
     { value: 'dark', label: t('settings.dark') },
-    { value: 'purple', label: t('settings.purple') },
   ];
   // Language names are always written in their own language, so they can be found either way.
   const languageOptions: { value: LanguageSetting; label: string }[] = [
@@ -178,6 +179,17 @@ export default function SettingsScreen() {
         <Text style={styles.label}>{t('settings.appearance')}</Text>
         <Segmented options={themeOptions} selected={settings.themeMode} onSelect={(v) => setSetting('themeMode', v)} />
         <Text style={styles.hint}>{t('settings.appearanceHint')}</Text>
+        <Pressable
+          style={styles.colorRow}
+          accessibilityRole="button"
+          accessibilityHint={t('settings.accentColorHint')}
+          onPress={() => setColorSheetOpen(true)}>
+          <View style={styles.switchText}>
+            <Text style={styles.switchLabel}>{t('settings.accentColor')}</Text>
+            <Text style={styles.hint}>{settings.accentColor || t('settings.accentDefault')}</Text>
+          </View>
+          <View style={[styles.colorDot, { backgroundColor: settings.accentColor || DEFAULT_ACCENT }]} />
+        </Pressable>
       </View>
 
       <View style={styles.section}>
@@ -266,6 +278,15 @@ export default function SettingsScreen() {
       </View>
 
       <ExportBackupSheet visible={exportSheetOpen} onExport={handleExport} onClose={() => setExportSheetOpen(false)} />
+      <AccentColorSheet
+        visible={colorSheetOpen}
+        value={settings.accentColor}
+        onSave={(color) => {
+          setSetting('accentColor', color);
+          setColorSheetOpen(false);
+        }}
+        onClose={() => setColorSheetOpen(false)}
+      />
 
       <Text style={styles.footer}>
         EverShelf {Constants.expoConfig?.version ?? ''} ·{' '}
@@ -340,4 +361,6 @@ const useStyles = makeStyles((c, look) => ({
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   switchText: { flex: 1, gap: 2 },
   switchLabel: { fontSize: fontSize.body, color: c.text },
+  colorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xs },
+  colorDot: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: c.border },
 }));

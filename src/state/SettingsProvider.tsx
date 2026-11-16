@@ -1,12 +1,12 @@
 import { useSQLiteContext } from 'expo-sqlite';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { normalizeHex } from '@/models/accentColor';
 import { SORT_ORDERS, type SortOrder } from '@/models/query';
 import { DEFAULT_READER_SETTINGS, parseReaderSettings, type ReaderSettings } from '@/models/readerSettings';
 import { loadSettings, saveSetting } from '@/storage/database';
 
-/** 'purple' is a light theme with purple accents and raised cards. */
-export type ThemeMode = 'system' | 'light' | 'dark' | 'purple';
+export type ThemeMode = 'system' | 'light' | 'dark';
 
 /** How a shelf shows its items: a grid of covers, or a list with small covers and details. */
 export type ViewMode = 'grid' | 'list';
@@ -16,6 +16,8 @@ export type LanguageSetting = 'system' | 'en' | 'zh';
 
 export interface Settings extends ReaderSettings {
   themeMode: ThemeMode;
+  /** The user's accent colour as '#RRGGBB', or '' for the app's own blue. */
+  accentColor: string;
   sortOrder: SortOrder;
   viewMode: ViewMode;
   language: LanguageSetting;
@@ -29,6 +31,7 @@ export interface Settings extends ReaderSettings {
 
 const DEFAULT_SETTINGS: Settings = {
   themeMode: 'system',
+  accentColor: '',
   sortOrder: 'newest',
   viewMode: 'grid',
   language: 'system',
@@ -81,12 +84,14 @@ export function useSettings(): SettingsContextValue {
 
 /** Ignores unknown or outdated stored values instead of trusting them. */
 function parseSettings(stored: Record<string, string>): Settings {
-  const themeModes: ThemeMode[] = ['system', 'light', 'dark', 'purple'];
+  // A saved 'purple' (a removed theme) falls back to the default.
+  const themeModes: ThemeMode[] = ['system', 'light', 'dark'];
   const viewModes: ViewMode[] = ['grid', 'list'];
   const languages: LanguageSetting[] = ['system', 'en', 'zh'];
   return {
     language: languages.find((l) => l === stored.language) ?? DEFAULT_SETTINGS.language,
     themeMode: themeModes.find((m) => m === stored.themeMode) ?? DEFAULT_SETTINGS.themeMode,
+    accentColor: normalizeHex(stored.accentColor ?? '') ?? DEFAULT_SETTINGS.accentColor,
     sortOrder: SORT_ORDERS.find((o) => o === stored.sortOrder) ?? DEFAULT_SETTINGS.sortOrder,
     viewMode: viewModes.find((m) => m === stored.viewMode) ?? DEFAULT_SETTINGS.viewMode,
     showContinueReading: stored.showContinueReading !== 'false',
