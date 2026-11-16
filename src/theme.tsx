@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { Appearance, Platform, StyleSheet, useColorScheme, type ImageStyle, type TextStyle, type ViewStyle } from 'react-native';
 
-import { accentPalette } from '@/models/accentColor';
+import { applyColorChoice } from '@/models/themeColors';
 import { useSettings } from '@/state/SettingsProvider';
 
 // All colours, sizes and spacing in one place. Restyling the app later should
@@ -123,16 +123,14 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
   const { settings } = useSettings();
   const systemScheme = useColorScheme();
   const mode = settings.themeMode;
-  const accent = settings.accentColor;
+  const { themeColor, buttonColor, tabColor } = settings;
   const base = mode === 'dark' || (mode === 'system' && systemScheme === 'dark') ? darkTheme : lightTheme;
-  // A new object only when the accent or light/dark changes: makeStyles caches styles per theme object.
-  const theme = useMemo(
-    () =>
-      accent
-        ? { ...base, colors: { ...base.colors, ...accentPalette(accent, base.colors.background, base.dark) } }
-        : base,
-    [base, accent],
-  );
+  // A new object only when a colour or light/dark changes: makeStyles caches styles per theme object.
+  const theme = useMemo(() => {
+    const choice = { theme: themeColor, button: buttonColor, tab: tabColor };
+    const { colors, statusBar } = applyColorChoice(base.colors, base.dark, choice);
+    return colors === base.colors ? base : { ...base, colors, statusBar };
+  }, [base, themeColor, buttonColor, tabColor]);
   // Tell the native side too, so Android's own parts (dialogs, the keyboard)
   // match. The strip behind the status bar is set per screen, in _layout.tsx.
   // react-native-web has no setColorScheme, so skip it in the browser.

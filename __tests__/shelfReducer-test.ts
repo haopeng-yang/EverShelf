@@ -12,8 +12,13 @@ function booksShelf(state: ShelfState) {
 }
 
 describe('shelves', () => {
-  it('starts with Books, Movies, Manga, Anime, Music, Videos', () => {
-    expect(createDefaultState().shelves.map((s) => s.name)).toEqual(['Books', 'Movies', 'Manga', 'Anime', 'Music', 'Videos']);
+  it('starts with Books, Comics, Music, Videos', () => {
+    expect(createDefaultState().shelves.map((s) => [s.name, s.kind])).toEqual([
+      ['Books', 'novel'],
+      ['Comics', 'comic'],
+      ['Music', 'music'],
+      ['Videos', 'video'],
+    ]);
   });
 
   it('adds a new shelf at the end', () => {
@@ -22,9 +27,9 @@ describe('shelves', () => {
   });
 
   it('renames and reorders shelves', () => {
-    let state = apply(createDefaultState(), { type: 'shelf/rename', shelfId: 'anime', name: 'Anime Series' });
-    state = apply(state, { type: 'shelf/move', shelfId: 'anime', toIndex: 0 });
-    expect(state.shelves.map((s) => s.name)).toEqual(['Anime Series', 'Books', 'Movies', 'Manga', 'Music', 'Videos']);
+    let state = apply(createDefaultState(), { type: 'shelf/rename', shelfId: 'music', name: 'Songs' });
+    state = apply(state, { type: 'shelf/move', shelfId: 'music', toIndex: 0 });
+    expect(state.shelves.map((s) => s.name)).toEqual(['Songs', 'Books', 'Comics', 'Videos']);
   });
 
   it('removing a shelf removes its items too', () => {
@@ -59,9 +64,9 @@ describe('items', () => {
     let state = createDefaultState();
     state = apply(state, addItem(booksShelf(state), 'Dune'));
     const dune = state.items[0];
-    state = apply(state, { type: 'item/move', itemId: dune.id, shelfId: 'movies' });
+    state = apply(state, { type: 'item/move', itemId: dune.id, shelfId: 'videos' });
     expect(selectItemsOnShelf(state, 'books')).toHaveLength(0);
-    expect(selectItemsOnShelf(state, 'movies')).toEqual([{ ...dune, shelfId: 'movies' }]);
+    expect(selectItemsOnShelf(state, 'videos')).toEqual([{ ...dune, shelfId: 'videos' }]);
   });
 
   it('ignores moves to the same shelf or one that does not exist', () => {

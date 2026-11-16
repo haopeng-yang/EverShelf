@@ -66,7 +66,7 @@ describe('queue', () => {
 
   it('finds the artist tag in either language', () => {
     let state = createDefaultState();
-    state = shelfReducer(state, addItem(state.shelves[4], 'Song'));
+    state = shelfReducer(state, addItem(state.shelves[2], 'Song'));
     const [song] = state.items;
     expect(artistOf(song)).toBe('');
     state = shelfReducer(state, addTag(song.id, 'Artist', 'The Band'));

@@ -194,9 +194,7 @@ describe('backup with shelf kinds', () => {
     };
     expect(parseBackup(JSON.stringify(old)).state.shelves.map((s) => s.kind)).toEqual([
       'novel', // books, by its id
-      'collection', // movies
-      'comic', // manga
-      'collection', // anime
+      'comic', // comics
       'music', // music
       'video', // videos
       'novel', // Reading, by the book on it
@@ -207,9 +205,9 @@ describe('backup with shelf kinds', () => {
 
 describe('backup with comics, songs and videos', () => {
   let state = createDefaultState();
-  state = shelfReducer(state, addItem(state.shelves[2], 'Akira'));
-  state = shelfReducer(state, addItem(state.shelves[4], 'Blue Song'));
-  state = shelfReducer(state, addItem(state.shelves[5], 'Holiday'));
+  state = shelfReducer(state, addItem(state.shelves[1], 'Akira'));
+  state = shelfReducer(state, addItem(state.shelves[2], 'Blue Song'));
+  state = shelfReducer(state, addItem(state.shelves[3], 'Holiday'));
   const [akira, song, holiday] = state.items;
   const comic: BackupComic = {
     itemId: akira.id,
@@ -287,10 +285,10 @@ describe('backup with comics, songs and videos', () => {
 
   it('works out shelf kinds from them for a backup without kinds', () => {
     const custom = shelfReducer(state, addShelf('Mixed', [], undefined, 'collection'));
-    const onCustom = shelfReducer(custom, addItem(custom.shelves[6], 'Tune'));
+    const onCustom = shelfReducer(custom, addItem(custom.shelves[4], 'Tune'));
     const tune = onCustom.items[3];
     const backup = createBackup(onCustom, new Map(), new Date(), { songs: [{ ...track, itemId: tune.id }] });
     const old = { ...backup, shelves: backup.shelves.map(({ kind: _kind, ...shelf }) => shelf) };
-    expect(parseBackup(JSON.stringify(old)).state.shelves[6].kind).toBe('music');
+    expect(parseBackup(JSON.stringify(old)).state.shelves[4].kind).toBe('music');
   });
 });

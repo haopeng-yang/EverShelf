@@ -37,7 +37,7 @@ describe('translations', () => {
   it('names first-run shelves in the phone language, keeping the same ids', () => {
     const english = createDefaultState('en');
     const chinese = createDefaultState('zh');
-    expect(chinese.shelves.map((s) => s.name)).toEqual(['书籍', '电影', '漫画', '动画', '音乐', '视频']);
+    expect(chinese.shelves.map((s) => s.name)).toEqual(['书籍', '漫画', '音乐', '视频']);
     expect(chinese.shelves[0].defaultTagNames).toEqual(['作者', '日期', '简介']);
     expect(chinese.shelves.map((s) => s.id)).toEqual(english.shelves.map((s) => s.id));
   });
@@ -49,11 +49,15 @@ describe('starting tags', () => {
     expect(defaultTagNamesFor('collection', translatorFor('zh'))).toEqual(['日期', '简介']);
   });
 
-  it('gives Author and Description their own examples, in either language', () => {
+  it('gives the starting tags their own examples, in either language', () => {
     const en = translatorFor('en');
     expect(tagValuePlaceholder('author ', en)).toBe('Value, e.g. William Shakespeare');
     expect(tagValuePlaceholder('Description', en)).toBe('Value, e.g. A masterpiece');
-    expect(tagValuePlaceholder('Date', en)).toBe('Value, e.g. Recommended 15+');
+    expect(tagValuePlaceholder('Date', en)).toBe('Value, e.g. 14 March 2021');
+    expect(tagValuePlaceholder('Artist', en)).toBe('Value, e.g. Norah Jones');
+    expect(tagValuePlaceholder('Album', en)).toBe('Value, e.g. Come Away with Me');
+    expect(tagValuePlaceholder('Age Restricted', en)).toBe('Value, e.g. Recommended 15+');
     expect(tagValuePlaceholder('作者', translatorFor('zh'))).toBe('内容，例如：莎士比亚');
+    expect(tagValuePlaceholder('日期', translatorFor('zh'))).toBe('内容，例如：2021年3月14日');
   });
 });

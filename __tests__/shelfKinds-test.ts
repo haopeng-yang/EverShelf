@@ -38,6 +38,7 @@ describe('canHold', () => {
 describe('inferShelfKind', () => {
   it('knows empty built-in shelves by their id', () => {
     expect(inferShelfKind('books', [])).toBe('novel');
+    expect(inferShelfKind('comics', [])).toBe('comic');
     expect(inferShelfKind('manga', [])).toBe('comic');
     expect(inferShelfKind('movies', [])).toBe('collection');
     expect(inferShelfKind('anime', [])).toBe('collection');
@@ -76,7 +77,7 @@ describe('helpers', () => {
 });
 
 describe('shelves and their items', () => {
-  /** Books (novel shelf) with a novel, a comic and a manual entry; Manga, Movies and Anime empty. */
+  /** Books (novel shelf) with a novel, a comic and a manual entry; Comics, Music and Videos empty. */
   function library() {
     let state = createDefaultState();
     const [books] = state.shelves;
@@ -98,9 +99,9 @@ describe('shelves and their items', () => {
   it('only offers Move targets that can hold every item', () => {
     const { state, dune, akira, wish, summaries } = library();
     const ids = (items: typeof state.items) => moveTargets(state.shelves, 'books', items, summaries).map((s) => s.id);
-    expect(ids([akira])).toEqual(['manga']);
-    expect(ids([wish])).toEqual(['movies', 'manga', 'anime', 'music', 'videos']);
-    expect(ids([akira, wish])).toEqual(['manga']);
+    expect(ids([akira])).toEqual(['comics']);
+    expect(ids([wish])).toEqual(['comics', 'music', 'videos']);
+    expect(ids([akira, wish])).toEqual(['comics']);
     expect(ids([dune, wish])).toEqual([]);
     expect(ids([dune, akira])).toEqual([]);
   });

@@ -46,9 +46,13 @@ export function canChangeKind(kind: ShelfKind, items: Item[], fileKinds: Readonl
   return items.every((item) => canHold(kind, itemFileKind(item.id, fileKinds)));
 }
 
-/** The built-in shelves' kinds, by their fixed ids (see defaults.ts). */
+/**
+ * The built-in shelves' kinds, by their fixed ids (see defaults.ts). Movies,
+ * Manga and Anime were built in before; they stay here for older installs and backups.
+ */
 const BUILT_IN_KINDS: Record<Id, ShelfKind> = {
   books: 'novel',
+  comics: 'comic',
   manga: 'comic',
   movies: 'collection',
   anime: 'collection',

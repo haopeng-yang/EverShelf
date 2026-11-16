@@ -1,7 +1,7 @@
 import { useSQLiteContext } from 'expo-sqlite';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { normalizeHex } from '@/models/accentColor';
+import { normalizeHex } from '@/models/themeColors';
 import { SORT_ORDERS, type SortOrder } from '@/models/query';
 import { DEFAULT_READER_SETTINGS, parseReaderSettings, type ReaderSettings } from '@/models/readerSettings';
 import { loadSettings, saveSetting } from '@/storage/database';
@@ -16,8 +16,12 @@ export type LanguageSetting = 'system' | 'en' | 'zh';
 
 export interface Settings extends ReaderSettings {
   themeMode: ThemeMode;
-  /** The user's accent colour as '#RRGGBB', or '' for the app's own blue. */
-  accentColor: string;
+  /** Tints the header and backgrounds: '#RRGGBB', or '' for the plain light or dark look. */
+  themeColor: string;
+  /** Buttons and links: '#RRGGBB', or '' to match the theme colour (the app's blue without one). */
+  buttonColor: string;
+  /** The selected shelf tab: '#RRGGBB', or '' to match the theme colour. */
+  tabColor: string;
   sortOrder: SortOrder;
   viewMode: ViewMode;
   language: LanguageSetting;
@@ -31,7 +35,9 @@ export interface Settings extends ReaderSettings {
 
 const DEFAULT_SETTINGS: Settings = {
   themeMode: 'system',
-  accentColor: '',
+  themeColor: '',
+  buttonColor: '',
+  tabColor: '',
   sortOrder: 'newest',
   viewMode: 'grid',
   language: 'system',
@@ -91,7 +97,10 @@ function parseSettings(stored: Record<string, string>): Settings {
   return {
     language: languages.find((l) => l === stored.language) ?? DEFAULT_SETTINGS.language,
     themeMode: themeModes.find((m) => m === stored.themeMode) ?? DEFAULT_SETTINGS.themeMode,
-    accentColor: normalizeHex(stored.accentColor ?? '') ?? DEFAULT_SETTINGS.accentColor,
+    themeColor: normalizeHex(stored.themeColor ?? '') ?? '',
+    // 'accentColor' was the first version of this, for buttons only.
+    buttonColor: normalizeHex(stored.buttonColor ?? stored.accentColor ?? '') ?? '',
+    tabColor: normalizeHex(stored.tabColor ?? '') ?? '',
     sortOrder: SORT_ORDERS.find((o) => o === stored.sortOrder) ?? DEFAULT_SETTINGS.sortOrder,
     viewMode: viewModes.find((m) => m === stored.viewMode) ?? DEFAULT_SETTINGS.viewMode,
     showContinueReading: stored.showContinueReading !== 'false',

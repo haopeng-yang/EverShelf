@@ -4,10 +4,11 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 
-import { AccentColorSheet, DEFAULT_ACCENT } from '@/components/AccentColorSheet';
 import { Button } from '@/components/Button';
 import { chooseImportMode, confirm, showMessage } from '@/components/dialogs';
 import { ExportBackupSheet, formatBytes } from '@/components/ExportBackupSheet';
+import { Segmented } from '@/components/Segmented';
+import { ThemeColorSheet } from '@/components/ThemeColorSheet';
 import type { Translate } from '@/i18n';
 import { useT } from '@/i18n/useT';
 import { BackupError, parseBackup } from '@/models/backup';
@@ -28,10 +29,11 @@ import {
 } from '@/storage/backupFlow';
 import { pruneBooks } from '@/storage/bookFiles';
 import { pruneCovers } from '@/storage/covers';
-import { fontSize, makeStyles, radius, raisedShadow, spacing } from '@/theme';
+import { fontSize, makeStyles, spacing, useTheme } from '@/theme';
 
 export default function SettingsScreen() {
   const { settings, setSetting } = useSettings();
+  const { colors } = useTheme();
   const state = useShelfState();
   const dispatch = useShelfDispatch();
   const styles = useStyles();
@@ -182,13 +184,22 @@ export default function SettingsScreen() {
         <Pressable
           style={styles.colorRow}
           accessibilityRole="button"
-          accessibilityHint={t('settings.accentColorHint')}
+          accessibilityHint={t('settings.themeColorsHint')}
           onPress={() => setColorSheetOpen(true)}>
           <View style={styles.switchText}>
-            <Text style={styles.switchLabel}>{t('settings.accentColor')}</Text>
-            <Text style={styles.hint}>{settings.accentColor || t('settings.accentDefault')}</Text>
+            <Text style={styles.switchLabel}>{t('settings.themeColors')}</Text>
+            <Text style={styles.hint}>
+              {settings.themeColor || settings.buttonColor || settings.tabColor
+                ? t('settings.themeColorsCustom')
+                : t('settings.themeColorsDefault')}
+            </Text>
           </View>
-          <View style={[styles.colorDot, { backgroundColor: settings.accentColor || DEFAULT_ACCENT }]} />
+          {/* What the header, buttons and selected tab look like now. */}
+          <View style={styles.colorDots}>
+            {[colors.header, colors.primary, colors.tabSelected].map((color, i) => (
+              <View key={i} style={[styles.colorDot, { backgroundColor: color }]} />
+            ))}
+          </View>
         </Pressable>
       </View>
 
@@ -278,11 +289,13 @@ export default function SettingsScreen() {
       </View>
 
       <ExportBackupSheet visible={exportSheetOpen} onExport={handleExport} onClose={() => setExportSheetOpen(false)} />
-      <AccentColorSheet
+      <ThemeColorSheet
         visible={colorSheetOpen}
-        value={settings.accentColor}
-        onSave={(color) => {
-          setSetting('accentColor', color);
+        value={{ theme: settings.themeColor, button: settings.buttonColor, tab: settings.tabColor }}
+        onSave={(choice) => {
+          setSetting('themeColor', choice.theme);
+          setSetting('buttonColor', choice.button);
+          setSetting('tabColor', choice.tab);
           setColorSheetOpen(false);
         }}
         onClose={() => setColorSheetOpen(false)}
@@ -293,36 +306,6 @@ export default function SettingsScreen() {
         {t('settings.summary', { shelves: state.shelves.length, items: state.items.length })}
       </Text>
     </ScrollView>
-  );
-}
-
-/** A row of options where exactly one is selected, like iOS's segmented control. */
-function Segmented<T extends string>({
-  options,
-  selected,
-  onSelect,
-}: {
-  options: { value: T; label: string }[];
-  selected: T;
-  onSelect: (value: T) => void;
-}) {
-  const styles = useStyles();
-  return (
-    <View style={styles.segmented} accessibilityRole="radiogroup">
-      {options.map((option) => {
-        const isSelected = selected === option.value;
-        return (
-          <Pressable
-            key={option.value}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: isSelected }}
-            onPress={() => onSelect(option.value)}
-            style={[styles.segment, isSelected && styles.segmentSelected]}>
-            <Text style={[styles.segmentLabel, isSelected && styles.segmentLabelSelected]}>{option.label}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
   );
 }
 
@@ -346,21 +329,11 @@ const useStyles = makeStyles((c, look) => ({
   section: { gap: spacing.sm },
   label: { fontSize: fontSize.small, color: look.raised ? c.primary : c.textMuted, fontWeight: '600' },
   hint: { fontSize: fontSize.small, color: c.textMuted },
-  segmented: {
-    flexDirection: 'row',
-    backgroundColor: c.surface,
-    borderRadius: look.pills ? radius.pill : radius.md,
-    padding: spacing.xs,
-    ...raisedShadow(c, look),
-  },
-  segment: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: look.pills ? radius.pill : radius.sm },
-  segmentSelected: { backgroundColor: look.raised ? c.tabSelected : c.background },
-  segmentLabel: { fontSize: fontSize.body, color: c.textMuted },
-  segmentLabelSelected: { color: look.raised ? c.onTabSelected : c.text, fontWeight: '600' },
   footer: { fontSize: fontSize.small, color: c.textMuted, textAlign: 'center' },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   switchText: { flex: 1, gap: 2 },
   switchLabel: { fontSize: fontSize.body, color: c.text },
   colorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xs },
-  colorDot: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: c.border },
+  colorDots: { flexDirection: 'row', gap: spacing.xs },
+  colorDot: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: c.border },
 }));

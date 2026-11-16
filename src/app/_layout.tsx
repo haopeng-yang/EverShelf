@@ -61,7 +61,7 @@ function ThemedStack() {
           headerTintColor: colors.headerTint,
           headerTitleStyle: { color: colors.onHeader, fontWeight: look.raised ? '700' : undefined },
           // A coloured header stands out on its own; a white one needs the line under it.
-          headerShadowVisible: !dark && !look.raised,
+          headerShadowVisible: !dark && !look.raised && colors.header === colors.background,
           contentStyle: { backgroundColor: colors.background },
         }}
       />

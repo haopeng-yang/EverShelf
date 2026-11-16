@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { addItem, addShelf, addTag } from '../src/models/actions';
 import { createDefaultState } from '../src/models/defaults';
 import { shelfReducer, type ShelfAction } from '../src/models/shelfReducer';
-import type { BookInfo, Chapter, Id, Page, ShelfState, Track, Video } from '../src/models/types';
+import type { BookInfo, Chapter, Id, Page, ShelfKind, ShelfState, Track, Video } from '../src/models/types';
 import {
   rowsToState,
   rowToBookInfo,
@@ -447,11 +447,11 @@ describe('Book storage', () => {
 });
 
 describe('Comic storage', () => {
-  /** A database with one item, "Akira", on the Manga shelf. */
+  /** A database with one item, "Akira", on the Comics shelf. */
   function withItem() {
     const db = openTestDb();
-    const manga = createDefaultState().shelves.find((s) => s.id === 'manga')!;
-    const state = dispatch(db, createDefaultState(), addItem(manga, 'Akira'));
+    const comics = createDefaultState().shelves.find((s) => s.id === 'comics')!;
+    const state = dispatch(db, createDefaultState(), addItem(comics, 'Akira'));
     return { db, state, itemId: state.items[0].id };
   }
 
@@ -565,9 +565,9 @@ describe('Shelf kinds', () => {
     const state = dispatch(db, createDefaultState(), addShelf('Songs', [], undefined, 'music'));
     expect(load(db)).toEqual(state);
     expect(load(db).shelves.at(-1)!.kind).toBe('music');
-    const changed = dispatch(db, state, { type: 'shelf/setKind', shelfId: 'movies', kind: 'comic' });
+    const changed = dispatch(db, state, { type: 'shelf/setKind', shelfId: 'comics', kind: 'collection' });
     expect(load(db)).toEqual(changed);
-    expect(changed.shelves[1].kind).toBe('comic');
+    expect(changed.shelves[1].kind).toBe('collection');
   });
 
   it('upgrading to version 9 gives each shelf the kind of what is on it, and can run twice', () => {
@@ -578,9 +578,16 @@ describe('Shelf kinds', () => {
     }
     // The items below are saved with today's statements, which need the tags table's images column.
     migrateV13(db);
+    // The six shelves older installs started with, before Comics replaced Movies, Manga and Anime.
+    const legacy = (id: string, name: string, kind: ShelfKind) => ({ id, name, kind, defaultTagNames: [] });
     let state: ShelfState = {
       shelves: [
-        ...createDefaultState().shelves,
+        legacy('books', 'Books', 'novel'),
+        legacy('movies', 'Movies', 'collection'),
+        legacy('manga', 'Manga', 'comic'),
+        legacy('anime', 'Anime', 'collection'),
+        legacy('music', 'Music', 'music'),
+        legacy('videos', 'Videos', 'video'),
         ...['Novels', 'Mixed', 'Wishlist'].map((name) => ({ id: name.toLowerCase(), name, kind: 'collection' as const, defaultTagNames: [] })),
       ],
       items: [],
@@ -644,7 +651,7 @@ describe('Song storage', () => {
     const db = openTestDb();
     let state = createDefaultState();
     const shelf = (id: string) => state.shelves.find((s) => s.id === id)!;
-    for (const [shelfId, title] of [['music', 'Night Drive'], ['books', 'Dune'], ['manga', 'Akira'], ['movies', 'Alien']]) {
+    for (const [shelfId, title] of [['music', 'Night Drive'], ['books', 'Dune'], ['comics', 'Akira'], ['videos', 'Alien']]) {
       state = dispatch(db, state, addItem(shelf(shelfId), title));
     }
     const [song, dune, akira] = state.items;
@@ -671,7 +678,7 @@ describe('Song storage', () => {
   it('an unknown stored format loads as mp3, and version 10 can run twice', () => {
     const db = openTestDb();
     db.exec(MIGRATE_V10);
-    const state = dispatch(db, createDefaultState(), addItem(createDefaultState().shelves[4], 'Odd'));
+    const state = dispatch(db, createDefaultState(), addItem(createDefaultState().shelves[2], 'Odd'));
     const itemId = state.items[0].id;
     db.prepare("INSERT INTO tracks (item_id, file_name, format) VALUES (?, 'song.xyz', 'xyz')").run(itemId);
     expect(loadTrack(db, itemId)).toMatchObject({ format: 'mp3', durationMs: null, lyrics: '' });
@@ -868,7 +875,7 @@ describe('Restoring comics, songs and videos from a backup', () => {
   it('saves each one with its position, ready to read, play or watch', () => {
     const db = openTestDb();
     let state = createDefaultState();
-    state = dispatch(db, state, addItem(state.shelves.find((s) => s.id === 'manga')!, 'Akira'));
+    state = dispatch(db, state, addItem(state.shelves.find((s) => s.id === 'comics')!, 'Akira'));
     state = dispatch(db, state, addItem(state.shelves.find((s) => s.id === 'music')!, 'Blue'));
     state = dispatch(db, state, addItem(state.shelves.find((s) => s.id === 'videos')!, 'Holiday'));
     const [akira, blue, holiday] = state.items.map((i) => i.id);

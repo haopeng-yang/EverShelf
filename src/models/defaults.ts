@@ -12,6 +12,9 @@ export function tagValuePlaceholder(tagName: string, t: Translate): string {
   const name = tagName.trim().toLowerCase();
   if (name === t('tag.author').toLowerCase()) return t('itemEdit.authorPlaceholder');
   if (name === t('tag.description').toLowerCase()) return t('itemEdit.descriptionPlaceholder');
+  if (name === t('tag.date').toLowerCase()) return t('itemEdit.datePlaceholder');
+  if (name === t('tag.artist').toLowerCase()) return t('itemEdit.artistPlaceholder');
+  if (name === t('tag.album').toLowerCase()) return t('itemEdit.albumPlaceholder');
   return t('itemEdit.tagValuePlaceholder');
 }
 
@@ -26,9 +29,7 @@ export function createDefaultState(language: Language = 'en'): ShelfState {
   return {
     shelves: [
       { id: 'books', name: t('defaults.books'), kind: 'novel', defaultTagNames: [t('tag.author'), date, description] },
-      { id: 'movies', name: t('defaults.movies'), kind: 'collection', defaultTagNames: [t('tag.director'), date, description] },
-      { id: 'manga', name: t('defaults.manga'), kind: 'comic', defaultTagNames: [t('tag.author'), date, description] },
-      { id: 'anime', name: t('defaults.anime'), kind: 'collection', defaultTagNames: [t('tag.studio'), date, description] },
+      { id: 'comics', name: t('defaults.comics'), kind: 'comic', defaultTagNames: [t('tag.author'), date, description] },
       { id: 'music', name: t('defaults.music'), kind: 'music', defaultTagNames: [t('tag.artist'), t('tag.album'), date] },
       { id: 'videos', name: t('defaults.videos'), kind: 'video', defaultTagNames: [date, description] },
     ],
